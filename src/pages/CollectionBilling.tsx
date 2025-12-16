@@ -12,15 +12,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Printer, Send, Filter, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import { Printer, Send, Filter, CheckCircle, AlertCircle, Clock, User } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { collectors, areas } from "@/data/collectors";
 
 interface Bill {
   id: string;
   customerId: string;
   customerName: string;
   area: string;
+  collectorId: string;
   billAmount: number;
   dueDate: Date;
   amountPaid: number;
@@ -34,6 +36,7 @@ const initialBills: Bill[] = [
     customerId: "CST-001",
     customerName: "Budi Santoso",
     area: "Jakarta Selatan",
+    collectorId: "COL-001",
     billAmount: 2500000,
     dueDate: new Date(2024, 0, 15),
     amountPaid: 0,
@@ -45,6 +48,7 @@ const initialBills: Bill[] = [
     customerId: "CST-002",
     customerName: "Siti Rahayu",
     area: "Jakarta Pusat",
+    collectorId: "COL-002",
     billAmount: 1800000,
     dueDate: new Date(2024, 0, 15),
     amountPaid: 0,
@@ -56,6 +60,7 @@ const initialBills: Bill[] = [
     customerId: "CST-003",
     customerName: "Ahmad Yani",
     area: "Jakarta Timur",
+    collectorId: "COL-003",
     billAmount: 3200000,
     dueDate: new Date(2024, 0, 15),
     amountPaid: 0,
@@ -67,6 +72,7 @@ const initialBills: Bill[] = [
     customerId: "CST-004",
     customerName: "Dewi Lestari",
     area: "Jakarta Selatan",
+    collectorId: "COL-001",
     billAmount: 4500000,
     dueDate: new Date(2024, 0, 16),
     amountPaid: 0,
@@ -78,6 +84,7 @@ const initialBills: Bill[] = [
     customerId: "CST-005",
     customerName: "Joko Widodo",
     area: "Jakarta Pusat",
+    collectorId: "COL-002",
     billAmount: 2000000,
     dueDate: new Date(2024, 0, 14),
     amountPaid: 0,
@@ -85,8 +92,6 @@ const initialBills: Bill[] = [
     collectorNotes: "",
   },
 ];
-
-const areas = ["Semua Area", "Jakarta Selatan", "Jakarta Pusat", "Jakarta Timur", "Jakarta Barat", "Jakarta Utara"];
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat("id-ID", {
@@ -96,18 +101,29 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+const getCollectorName = (collectorId: string) => {
+  const collector = collectors.find((c) => c.id === collectorId);
+  return collector?.name || "-";
+};
+
 export default function CollectionBilling() {
   const [bills, setBills] = useState<Bill[]>(initialBills);
-  const [selectedArea, setSelectedArea] = useState("Semua Area");
+  const [selectedArea, setSelectedArea] = useState("all");
+  const [selectedCollector, setSelectedCollector] = useState("all");
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
   const filteredBills = bills.filter((bill) => {
-    if (selectedArea !== "Semua Area" && bill.area !== selectedArea) return false;
+    if (selectedArea !== "all" && bill.area !== selectedArea) return false;
+    if (selectedCollector !== "all" && bill.collectorId !== selectedCollector) return false;
     return true;
   });
 
+  const selectedCollectorName = selectedCollector === "all" 
+    ? "Semua Kolektor" 
+    : getCollectorName(selectedCollector);
+
   const handlePrintManifest = () => {
-    toast.success("Mencetak daftar penagihan...");
+    toast.success(`Mencetak manifest untuk ${selectedCollectorName}...`);
   };
 
   const handlePaymentChange = (billId: string, field: string, value: string | number) => {
@@ -175,6 +191,7 @@ export default function CollectionBilling() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="all">Semua Area</SelectItem>
                     {areas.map((area) => (
                       <SelectItem key={area} value={area}>
                         {area}
@@ -183,10 +200,26 @@ export default function CollectionBilling() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Kolektor</label>
+                <Select value={selectedCollector} onValueChange={setSelectedCollector}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Kolektor</SelectItem>
+                    {collectors.map((collector) => (
+                      <SelectItem key={collector.id} value={collector.id}>
+                        {collector.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-end">
                 <Button onClick={handlePrintManifest} className="gap-2">
                   <Printer className="h-4 w-4" />
-                  Print Daftar Kolektor
+                  Print Manifest untuk {selectedCollectorName}
                 </Button>
               </div>
             </div>
@@ -222,6 +255,9 @@ export default function CollectionBilling() {
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Alamat/Area
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Kolektor
+                  </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Tagihan
                   </th>
@@ -239,6 +275,12 @@ export default function CollectionBilling() {
                       <p className="text-xs text-muted-foreground">{bill.customerId}</p>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{bill.area}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <User className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{getCollectorName(bill.collectorId)}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold">
                       {formatCurrency(bill.billAmount)}
                     </td>
@@ -264,6 +306,25 @@ export default function CollectionBilling() {
             </p>
           </div>
 
+          <div className="flex gap-4 mb-4">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Filter Kolektor</label>
+              <Select value={selectedCollector} onValueChange={setSelectedCollector}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Kolektor</SelectItem>
+                  {collectors.map((collector) => (
+                    <SelectItem key={collector.id} value={collector.id}>
+                      {collector.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="bg-card rounded-xl border p-4">
               <p className="text-sm text-muted-foreground">Total Target</p>
@@ -281,13 +342,16 @@ export default function CollectionBilling() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-48">
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-44">
                     Pelanggan
                   </th>
-                  <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground w-32">
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-36">
+                    Kolektor
+                  </th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground w-28">
                     Tagihan
                   </th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-40">
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-36">
                     Jumlah Bayar
                   </th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-32">
@@ -303,6 +367,12 @@ export default function CollectionBilling() {
                   <tr key={bill.id} className="hover:bg-muted/30">
                     <td className="px-3 py-2">
                       <p className="font-medium">{bill.customerName}</p>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <User className="h-3.5 w-3.5" />
+                        <span>{getCollectorName(bill.collectorId)}</span>
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-right font-mono">
                       {formatCurrency(bill.billAmount)}
