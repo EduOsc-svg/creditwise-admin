@@ -6,12 +6,14 @@ import {
   Wallet,
   History,
   CreditCard,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Data Pelanggan", href: "/customers", icon: Users },
+  { name: "Kolektor", href: "/collectors", icon: UserCheck },
   { name: "Penerbitan Kupon", href: "/coupons", icon: Ticket },
   { name: "Penagihan", href: "/collection", icon: Wallet },
   { name: "Riwayat", href: "/history", icon: History },

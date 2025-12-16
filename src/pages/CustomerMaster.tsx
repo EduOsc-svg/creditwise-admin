@@ -12,9 +12,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Phone, MapPin, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Phone, MapPin, Edit, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
+import { collectors, areas } from "@/data/collectors";
 
 interface Customer {
   id: string;
@@ -22,6 +30,7 @@ interface Customer {
   phone: string;
   address: string;
   area: string;
+  assignedCollectorId: string;
   creditLimit: number;
   outstandingDebt: number;
   status: string;
@@ -35,6 +44,7 @@ const initialCustomers: Customer[] = [
     phone: "081234567890",
     address: "Jl. Merdeka No. 123, Jakarta Selatan",
     area: "Jakarta Selatan",
+    assignedCollectorId: "COL-001",
     creditLimit: 10000000,
     outstandingDebt: 2500000,
     status: "active",
@@ -46,6 +56,7 @@ const initialCustomers: Customer[] = [
     phone: "082345678901",
     address: "Jl. Sudirman No. 45, Jakarta Pusat",
     area: "Jakarta Pusat",
+    assignedCollectorId: "COL-002",
     creditLimit: 15000000,
     outstandingDebt: 8500000,
     status: "active",
@@ -57,6 +68,7 @@ const initialCustomers: Customer[] = [
     phone: "083456789012",
     address: "Jl. Gatot Subroto No. 67, Jakarta Timur",
     area: "Jakarta Timur",
+    assignedCollectorId: "COL-003",
     creditLimit: 5000000,
     outstandingDebt: 4800000,
     status: "warning",
@@ -68,6 +80,7 @@ const initialCustomers: Customer[] = [
     phone: "084567890123",
     address: "Jl. Kemang Raya No. 89, Jakarta Selatan",
     area: "Jakarta Selatan",
+    assignedCollectorId: "COL-001",
     creditLimit: 20000000,
     outstandingDebt: 0,
     status: "active",
@@ -79,6 +92,7 @@ const initialCustomers: Customer[] = [
     phone: "085678901234",
     address: "Jl. Thamrin No. 12, Jakarta Pusat",
     area: "Jakarta Pusat",
+    assignedCollectorId: "COL-002",
     creditLimit: 8000000,
     outstandingDebt: 8000000,
     status: "blocked",
@@ -94,6 +108,11 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+const getCollectorName = (collectorId: string) => {
+  const collector = collectors.find((c) => c.id === collectorId);
+  return collector?.name || "-";
+};
+
 export default function CustomerMaster() {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [searchQuery, setSearchQuery] = useState("");
@@ -103,6 +122,7 @@ export default function CustomerMaster() {
     phone: "",
     address: "",
     area: "",
+    assignedCollectorId: "",
     creditLimit: "",
   });
 
@@ -125,6 +145,7 @@ export default function CustomerMaster() {
       phone: newCustomer.phone,
       address: newCustomer.address,
       area: newCustomer.area,
+      assignedCollectorId: newCustomer.assignedCollectorId,
       creditLimit: parseInt(newCustomer.creditLimit) || 0,
       outstandingDebt: 0,
       status: "active",
@@ -132,7 +153,7 @@ export default function CustomerMaster() {
     };
 
     setCustomers([...customers, customer]);
-    setNewCustomer({ name: "", phone: "", address: "", area: "", creditLimit: "" });
+    setNewCustomer({ name: "", phone: "", address: "", area: "", assignedCollectorId: "", creditLimit: "" });
     setIsDialogOpen(false);
     toast.success("Pelanggan berhasil ditambahkan");
   };
@@ -160,19 +181,26 @@ export default function CustomerMaster() {
       ),
     },
     {
-      key: "address",
-      header: "Alamat",
+      key: "area",
+      header: "Area",
+      className: "w-32",
       render: (item: Customer) => (
-        <div className="flex items-start gap-1 text-sm">
-          <MapPin className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
-          <span className="line-clamp-2">{item.address}</span>
+        <div className="flex items-center gap-1 text-sm">
+          <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+          {item.area}
         </div>
       ),
     },
     {
-      key: "area",
-      header: "Area",
-      className: "w-32",
+      key: "assignedCollector",
+      header: "Kolektor",
+      className: "w-36",
+      render: (item: Customer) => (
+        <div className="flex items-center gap-1.5 text-sm">
+          <User className="h-3.5 w-3.5 text-muted-foreground" />
+          <span>{getCollectorName(item.assignedCollectorId)}</span>
+        </div>
+      ),
     },
     {
       key: "creditLimit",
@@ -260,22 +288,50 @@ export default function CustomerMaster() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Area</Label>
-                  <Input
-                    placeholder="Wilayah"
+                  <Label>Area *</Label>
+                  <Select
                     value={newCustomer.area}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, area: e.target.value })}
-                  />
+                    onValueChange={(value) => setNewCustomer({ ...newCustomer, area: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih area" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {areas.map((area) => (
+                        <SelectItem key={area} value={area}>
+                          {area}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Limit Kredit</Label>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={newCustomer.creditLimit}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, creditLimit: e.target.value })}
-                  />
+                  <Label>Kolektor *</Label>
+                  <Select
+                    value={newCustomer.assignedCollectorId}
+                    onValueChange={(value) => setNewCustomer({ ...newCustomer, assignedCollectorId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih kolektor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {collectors.map((collector) => (
+                        <SelectItem key={collector.id} value={collector.id}>
+                          {collector.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Limit Kredit</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={newCustomer.creditLimit}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, creditLimit: e.target.value })}
+                />
               </div>
               <Button onClick={handleAddCustomer} className="w-full">
                 Simpan Pelanggan

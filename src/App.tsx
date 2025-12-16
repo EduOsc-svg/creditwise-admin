@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import CustomerMaster from "./pages/CustomerMaster";
+import CollectorManagement from "./pages/CollectorManagement";
 import CouponIssuance from "./pages/CouponIssuance";
 import CollectionBilling from "./pages/CollectionBilling";
 import CustomerHistory from "./pages/CustomerHistory";
@@ -21,6 +22,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/customers" element={<CustomerMaster />} />
+          <Route path="/collectors" element={<CollectorManagement />} />
           <Route path="/coupons" element={<CouponIssuance />} />
           <Route path="/collection" element={<CollectionBilling />} />
           <Route path="/history" element={<CustomerHistory />} />
