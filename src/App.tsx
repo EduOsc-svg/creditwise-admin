@@ -8,6 +8,7 @@ import CustomerMaster from "./pages/CustomerMaster";
 import CollectorManagement from "./pages/CollectorManagement";
 import CouponIssuance from "./pages/CouponIssuance";
 import CollectionBilling from "./pages/CollectionBilling";
+import FinancialReports from "./pages/FinancialReports";
 import CustomerHistory from "./pages/CustomerHistory";
 import NotFound from "./pages/NotFound";
 
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/collectors" element={<CollectorManagement />} />
           <Route path="/coupons" element={<CouponIssuance />} />
           <Route path="/collection" element={<CollectionBilling />} />
+          <Route path="/reports" element={<FinancialReports />} />
           <Route path="/history" element={<CustomerHistory />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

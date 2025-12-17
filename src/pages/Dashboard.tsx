@@ -3,9 +3,24 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { PageHeader } from "@/components/ui/page-header";
-import { Ticket, Wallet, Target, Banknote, Clock, TrendingUp, User } from "lucide-react";
+import { Ticket, Wallet, Target, Banknote, Clock, TrendingUp, User, PieChart, BarChart3, MapPin } from "lucide-react";
 import { format } from "date-fns";
-import { collectors } from "@/data/collectors";
+import { collectors, areas } from "@/data/collectors";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  Legend,
+  BarChart,
+  Bar,
+} from "recharts";
 
 const metrics = [
   {
@@ -70,14 +85,32 @@ const recentActivities = [
     timestamp: new Date(2024, 0, 15, 10, 0),
     status: "expired",
   },
-  {
-    id: 5,
-    type: "payment",
-    description: "Gagal tagih - Joko Widodo",
-    amount: "Rp 2,000,000",
-    timestamp: new Date(2024, 0, 15, 9, 30),
-    status: "overdue",
-  },
+];
+
+// Monthly data for Sales vs Collections chart
+const monthlyData = [
+  { month: "Jan", sales: 45, collections: 38 },
+  { month: "Feb", sales: 52, collections: 45 },
+  { month: "Mar", sales: 48, collections: 50 },
+  { month: "Apr", sales: 61, collections: 52 },
+  { month: "May", sales: 55, collections: 58 },
+  { month: "Jun", sales: 67, collections: 60 },
+];
+
+// Category data for Pie chart
+const categoryData = [
+  { name: "Elektronik", value: 40, color: "hsl(var(--chart-1))" },
+  { name: "Furniture", value: 30, color: "hsl(var(--chart-2))" },
+  { name: "Sembako", value: 20, color: "hsl(var(--chart-3))" },
+  { name: "Lainnya", value: 10, color: "hsl(var(--chart-4))" },
+];
+
+// Top performing areas
+const areaPerformance = [
+  { area: "Jakarta Utara", value: 35000000 },
+  { area: "Jakarta Selatan", value: 28000000 },
+  { area: "Jakarta Barat", value: 22000000 },
+  { area: "Jakarta Timur", value: 18000000 },
 ];
 
 const getStatusVariant = (status: string) => {
@@ -120,11 +153,18 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+const formatCurrencyShort = (amount: number) => {
+  if (amount >= 1000000) {
+    return `${(amount / 1000000).toFixed(1)}M`;
+  }
+  return formatCurrency(amount);
+};
+
 const activityColumns = [
   {
     key: "timestamp",
     header: "Waktu",
-    className: "w-32",
+    className: "w-20",
     render: (item: (typeof recentActivities)[0]) => (
       <div className="flex items-center gap-2 text-muted-foreground">
         <Clock className="h-3.5 w-3.5" />
@@ -171,10 +211,120 @@ export default function Dashboard() {
         description={`Overview data per ${format(new Date(), "dd MMMM yyyy")}`}
       />
 
+      {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {metrics.map((metric, index) => (
           <MetricCard key={index} {...metric} />
         ))}
+      </div>
+
+      {/* Financial Overview Charts */}
+      <div className="bg-card rounded-xl border p-4 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <BarChart3 className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold text-foreground">Financial Overview</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Monthly Sales vs Collections Chart */}
+          <div className="lg:col-span-2 space-y-3">
+            <h3 className="text-sm font-medium text-muted-foreground">Sales vs Collections (Monthly)</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthlyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `${v}jt`} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                    }}
+                    formatter={(value: number) => [`Rp ${value} Juta`, ""]}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="sales"
+                    name="Omset (Credit)"
+                    stroke="hsl(var(--info))"
+                    strokeWidth={2}
+                    dot={{ fill: "hsl(var(--info))" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="collections"
+                    name="Tagihan (Cash)"
+                    stroke="hsl(var(--success))"
+                    strokeWidth={2}
+                    dot={{ fill: "hsl(var(--success))" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Pie Chart - Sales by Category */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-muted-foreground">Sales by Category</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsPieChart>
+                  <Pie
+                    data={categoryData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    dataKey="value"
+                    label={({ name, value }) => `${value}%`}
+                    labelLine={false}
+                  >
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                    }}
+                    formatter={(value: number) => [`${value}%`, ""]}
+                  />
+                  <Legend />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Top Performing Areas */}
+      <div className="bg-card rounded-xl border p-4 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <MapPin className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold text-foreground">Top Performing Areas</h2>
+        </div>
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={areaPerformance} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => formatCurrencyShort(v)} />
+              <YAxis type="category" dataKey="area" stroke="hsl(var(--muted-foreground))" fontSize={12} width={120} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "8px",
+                }}
+                formatter={(value: number) => [formatCurrency(value), "Total Omset"]}
+              />
+              <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
