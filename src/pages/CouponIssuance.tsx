@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Printer, Ticket } from "lucide-react";
+import { Plus, Printer, Ticket, TrendingUp, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -99,6 +100,9 @@ const initialCoupons: Coupon[] = [
   },
 ];
 
+// Lending limit configuration
+const MONTHLY_LENDING_LIMIT = 1000000000; // 1 Billion
+
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -143,9 +147,30 @@ export default function CouponIssuance() {
     expiryDays: "30",
   });
 
+  // Calculate monthly issued amount (simulation)
+  const monthlyIssuedAmount = coupons
+    .filter((c) => {
+      const now = new Date();
+      return (
+        c.issuedDate.getMonth() === now.getMonth() &&
+        c.issuedDate.getFullYear() === now.getFullYear()
+      );
+    })
+    .reduce((sum, c) => sum + c.amount, 0);
+
+  const remainingLimit = MONTHLY_LENDING_LIMIT - monthlyIssuedAmount;
+  const usagePercentage = (monthlyIssuedAmount / MONTHLY_LENDING_LIMIT) * 100;
+  const isNearLimit = usagePercentage >= 80;
+
   const handleIssueCoupon = () => {
     if (!newCoupon.customerId || !newCoupon.amount || !newCoupon.category) {
       toast.error("Semua field wajib diisi");
+      return;
+    }
+
+    const amount = parseInt(newCoupon.amount);
+    if (amount > remainingLimit) {
+      toast.error("Jumlah melebihi sisa limit bulanan");
       return;
     }
 
@@ -158,7 +183,7 @@ export default function CouponIssuance() {
       code: `CPN-${String(90 + coupons.length).padStart(4, "0")}`,
       customerId: newCoupon.customerId,
       customerName: customer?.name || "",
-      amount: parseInt(newCoupon.amount),
+      amount: amount,
       category: newCoupon.category,
       issuedDate: new Date(),
       expiryDate,
@@ -202,7 +227,7 @@ export default function CouponIssuance() {
       header: "Nilai",
       className: "text-right",
       render: (item: Coupon) => (
-        <span className="font-mono font-semibold">{formatCurrency(item.amount)}</span>
+        <span className="font-mono font-semibold text-info">{formatCurrency(item.amount)}</span>
       ),
     },
     {
@@ -337,6 +362,52 @@ export default function CouponIssuance() {
         </Dialog>
       </PageHeader>
 
+      {/* Lending Limit Section */}
+      <div className="bg-card rounded-xl border p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            <h2 className="font-semibold">Limit Pinjaman Bulanan</h2>
+          </div>
+          {isNearLimit && (
+            <div className="flex items-center gap-1.5 text-warning">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="text-sm font-medium">Mendekati limit</span>
+            </div>
+          )}
+        </div>
+        
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Terpakai bulan ini</span>
+            <span className="font-mono font-semibold text-info">{formatCurrency(monthlyIssuedAmount)}</span>
+          </div>
+          
+          <Progress 
+            value={usagePercentage} 
+            className="h-3"
+          />
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Sisa Limit</p>
+              <p className="text-lg font-semibold font-mono text-success">{formatCurrency(remainingLimit)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Limit Bulanan</p>
+              <p className="text-lg font-semibold font-mono">{formatCurrency(MONTHLY_LENDING_LIMIT)}</p>
+            </div>
+          </div>
+          
+          <div className="text-center pt-2 border-t">
+            <span className="text-sm text-muted-foreground">
+              Penggunaan: <span className={`font-semibold ${isNearLimit ? 'text-warning' : 'text-foreground'}`}>{usagePercentage.toFixed(1)}%</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="bg-card rounded-xl border p-4">
           <p className="text-sm text-muted-foreground">Kupon Aktif</p>
@@ -344,7 +415,7 @@ export default function CouponIssuance() {
         </div>
         <div className="bg-card rounded-xl border p-4">
           <p className="text-sm text-muted-foreground">Total Nilai Aktif</p>
-          <p className="text-2xl font-semibold font-mono">{formatCurrency(totalActiveValue)}</p>
+          <p className="text-2xl font-semibold font-mono text-info">{formatCurrency(totalActiveValue)}</p>
         </div>
       </div>
 

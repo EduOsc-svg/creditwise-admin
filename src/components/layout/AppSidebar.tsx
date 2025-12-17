@@ -7,6 +7,7 @@ import {
   History,
   CreditCard,
   UserCheck,
+  FileBarChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ const navigation = [
   { name: "Kolektor", href: "/collectors", icon: UserCheck },
   { name: "Penerbitan Kupon", href: "/coupons", icon: Ticket },
   { name: "Penagihan", href: "/collection", icon: Wallet },
+  { name: "Laporan Keuangan", href: "/reports", icon: FileBarChart },
   { name: "Riwayat", href: "/history", icon: History },
 ];
 

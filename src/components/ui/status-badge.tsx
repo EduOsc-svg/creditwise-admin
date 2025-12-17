@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type StatusVariant = "success" | "warning" | "danger" | "default";
+type StatusVariant = "success" | "warning" | "danger" | "info" | "default";
 
 interface StatusBadgeProps {
   variant: StatusVariant;
@@ -12,6 +12,7 @@ const variantStyles: Record<StatusVariant, string> = {
   success: "bg-success-muted text-success border-success/20",
   warning: "bg-warning-muted text-warning border-warning/20",
   danger: "bg-danger-muted text-danger border-danger/20",
+  info: "bg-info/10 text-info border-info/20",
   default: "bg-muted text-muted-foreground border-border",
 };
 
