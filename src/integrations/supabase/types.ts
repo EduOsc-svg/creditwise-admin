@@ -14,7 +14,203 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      collectors: {
+        Row: {
+          active_customers: number | null
+          assigned_area: string
+          collector_code: string
+          created_at: string
+          id: string
+          name: string
+          phone: string
+          total_collected: number | null
+          updated_at: string
+        }
+        Insert: {
+          active_customers?: number | null
+          assigned_area: string
+          collector_code: string
+          created_at?: string
+          id?: string
+          name: string
+          phone: string
+          total_collected?: number | null
+          updated_at?: string
+        }
+        Update: {
+          active_customers?: number | null
+          assigned_area?: string
+          collector_code?: string
+          created_at?: string
+          id?: string
+          name?: string
+          phone?: string
+          total_collected?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      coupons: {
+        Row: {
+          amount: number
+          coupon_code: string
+          created_at: string
+          customer_id: string
+          expiry_date: string
+          id: string
+          is_paid: boolean | null
+          product_category: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          coupon_code: string
+          created_at?: string
+          customer_id: string
+          expiry_date: string
+          id?: string
+          is_paid?: boolean | null
+          product_category: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          coupon_code?: string
+          created_at?: string
+          customer_id?: string
+          expiry_date?: string
+          id?: string
+          is_paid?: boolean | null
+          product_category?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupons_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customers: {
+        Row: {
+          address: string | null
+          area: string
+          collector_id: string | null
+          created_at: string
+          credit_score: string | null
+          customer_code: string
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          area: string
+          collector_id?: string | null
+          created_at?: string
+          credit_score?: string | null
+          customer_code: string
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          area?: string
+          collector_id?: string | null
+          created_at?: string
+          credit_score?: string | null
+          customer_code?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_collector_id_fkey"
+            columns: ["collector_id"]
+            isOneToOne: false
+            referencedRelation: "collectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount_due: number
+          amount_paid: number | null
+          collection_date: string
+          collector_id: string | null
+          coupon_id: string
+          created_at: string
+          customer_id: string
+          id: string
+          next_collection_date: string | null
+          overdue_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_due: number
+          amount_paid?: number | null
+          collection_date: string
+          collector_id?: string | null
+          coupon_id: string
+          created_at?: string
+          customer_id: string
+          id?: string
+          next_collection_date?: string | null
+          overdue_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_due?: number
+          amount_paid?: number | null
+          collection_date?: string
+          collector_id?: string | null
+          coupon_id?: string
+          created_at?: string
+          customer_id?: string
+          id?: string
+          next_collection_date?: string | null
+          overdue_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_collector_id_fkey"
+            columns: ["collector_id"]
+            isOneToOne: false
+            referencedRelation: "collectors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
