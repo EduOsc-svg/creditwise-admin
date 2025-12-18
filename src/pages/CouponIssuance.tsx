@@ -168,6 +168,16 @@ export default function CouponIssuance() {
       return;
     }
 
+    // Check if customer has unpaid active coupons
+    const hasUnpaidCoupon = coupons.some(
+      (c) => c.customerId === newCoupon.customerId && c.status === "active"
+    );
+
+    if (hasUnpaidCoupon) {
+      toast.error("Pelanggan masih memiliki kupon aktif yang belum dibayar. Tidak dapat menerbitkan kupon baru.");
+      return;
+    }
+
     const amount = parseInt(newCoupon.amount);
     if (amount > remainingLimit) {
       toast.error("Jumlah melebihi sisa limit bulanan");
