@@ -27,7 +27,8 @@ interface Bill {
   dueDate: Date;
   amountPaid: number;
   status: string;
-  collectorNotes: string;
+  overdueDate: Date | null;
+  nextCollectionDate: Date | null;
 }
 
 const initialBills: Bill[] = [
@@ -41,7 +42,8 @@ const initialBills: Bill[] = [
     dueDate: new Date(2024, 0, 15),
     amountPaid: 0,
     status: "pending",
-    collectorNotes: "",
+    overdueDate: null,
+    nextCollectionDate: null,
   },
   {
     id: "BIL-002",
@@ -53,7 +55,8 @@ const initialBills: Bill[] = [
     dueDate: new Date(2024, 0, 15),
     amountPaid: 0,
     status: "pending",
-    collectorNotes: "",
+    overdueDate: null,
+    nextCollectionDate: null,
   },
   {
     id: "BIL-003",
@@ -65,7 +68,8 @@ const initialBills: Bill[] = [
     dueDate: new Date(2024, 0, 15),
     amountPaid: 0,
     status: "pending",
-    collectorNotes: "",
+    overdueDate: null,
+    nextCollectionDate: null,
   },
   {
     id: "BIL-004",
@@ -77,7 +81,8 @@ const initialBills: Bill[] = [
     dueDate: new Date(2024, 0, 16),
     amountPaid: 0,
     status: "pending",
-    collectorNotes: "",
+    overdueDate: null,
+    nextCollectionDate: null,
   },
   {
     id: "BIL-005",
@@ -89,7 +94,8 @@ const initialBills: Bill[] = [
     dueDate: new Date(2024, 0, 14),
     amountPaid: 0,
     status: "overdue",
-    collectorNotes: "",
+    overdueDate: new Date(2024, 0, 14),
+    nextCollectionDate: null,
   },
 ];
 
@@ -126,7 +132,7 @@ export default function CollectionBilling() {
     toast.success(`Mencetak manifest untuk ${selectedCollectorName}...`);
   };
 
-  const handlePaymentChange = (billId: string, field: string, value: string | number) => {
+  const handlePaymentChange = (billId: string, field: string, value: string | number | Date | null) => {
     setBills((prev) =>
       prev.map((bill) => {
         if (bill.id === billId) {
@@ -135,11 +141,20 @@ export default function CollectionBilling() {
             const paid = Number(value);
             if (paid >= bill.billAmount) {
               updated.status = "paid";
+              // Set next collection date to tomorrow when paid
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              updated.nextCollectionDate = tomorrow;
+              updated.overdueDate = null;
             } else if (paid > 0) {
               updated.status = "partial";
             } else {
               updated.status = "pending";
             }
+          }
+          if (field === "status" && value === "unpaid") {
+            // Set overdue date when marked as unpaid
+            updated.overdueDate = new Date();
           }
           return updated;
         }
@@ -150,7 +165,7 @@ export default function CollectionBilling() {
 
   const handleSubmitCollection = () => {
     const updated = bills.filter(
-      (b) => b.status === "paid" || b.status === "partial" || b.collectorNotes
+      (b) => b.status === "paid" || b.status === "partial" || b.overdueDate
     );
     toast.success(`${updated.length} data penagihan berhasil disimpan`);
   };
@@ -357,8 +372,11 @@ export default function CollectionBilling() {
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-32">
                     Status
                   </th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Catatan Kolektor
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-36">
+                    Tanggal Nunggak
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-36">
+                    Penagihan Berikut
                   </th>
                 </tr>
               </thead>
@@ -421,14 +439,31 @@ export default function CollectionBilling() {
                       </Select>
                     </td>
                     <td className="px-3 py-2">
-                      <Input
-                        placeholder="Catatan..."
-                        value={bill.collectorNotes}
-                        onChange={(e) =>
-                          handlePaymentChange(bill.id, "collectorNotes", e.target.value)
-                        }
-                        className="h-8"
-                      />
+                      {bill.overdueDate ? (
+                        <span className="text-danger font-medium text-sm">
+                          {format(bill.overdueDate, "dd MMM yyyy")}
+                        </span>
+                      ) : bill.status === "unpaid" || bill.status === "overdue" ? (
+                        <Input
+                          type="date"
+                          value={bill.overdueDate ? format(bill.overdueDate, "yyyy-MM-dd") : ""}
+                          onChange={(e) =>
+                            handlePaymentChange(bill.id, "overdueDate", e.target.value ? new Date(e.target.value) : null)
+                          }
+                          className="h-8"
+                        />
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {bill.nextCollectionDate ? (
+                        <span className="text-success font-medium text-sm">
+                          {format(bill.nextCollectionDate, "dd MMM yyyy")}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
                     </td>
                   </tr>
                 ))}
