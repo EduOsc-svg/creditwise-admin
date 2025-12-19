@@ -4,139 +4,11 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Search, User, Phone, MapPin, CreditCard, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { Search, User, Phone, MapPin, CreditCard, ArrowUpRight, ArrowDownLeft, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  address: string;
-  creditScore: "good" | "bad";
-  totalCredit: number;
-  totalPaid: number;
-}
-
-interface Transaction {
-  id: string;
-  type: "credit" | "payment";
-  description: string;
-  amount: number;
-  date: Date;
-  balance: number;
-}
-
-const customers: Customer[] = [
-  {
-    id: "CST-001",
-    name: "Budi Santoso",
-    phone: "081234567890",
-    address: "Jl. Merdeka No. 123, Jakarta Selatan",
-    creditScore: "good",
-    totalCredit: 15000000,
-    totalPaid: 12500000,
-  },
-  {
-    id: "CST-002",
-    name: "Siti Rahayu",
-    phone: "082345678901",
-    address: "Jl. Sudirman No. 45, Jakarta Pusat",
-    creditScore: "good",
-    totalCredit: 25000000,
-    totalPaid: 16500000,
-  },
-  {
-    id: "CST-003",
-    name: "Ahmad Yani",
-    phone: "083456789012",
-    address: "Jl. Gatot Subroto No. 67, Jakarta Timur",
-    creditScore: "bad",
-    totalCredit: 8000000,
-    totalPaid: 3200000,
-  },
-];
-
-const transactionHistory: Record<string, Transaction[]> = {
-  "CST-001": [
-    {
-      id: "TRX-001",
-      type: "credit",
-      description: "Kupon CPN-0089 - Elektronik",
-      amount: 2500000,
-      date: new Date(2024, 0, 15),
-      balance: 2500000,
-    },
-    {
-      id: "TRX-002",
-      type: "payment",
-      description: "Pembayaran tunai",
-      amount: 1000000,
-      date: new Date(2024, 0, 10),
-      balance: 1500000,
-    },
-    {
-      id: "TRX-003",
-      type: "credit",
-      description: "Kupon CPN-0085 - Furniture",
-      amount: 5000000,
-      date: new Date(2024, 0, 5),
-      balance: 6500000,
-    },
-    {
-      id: "TRX-004",
-      type: "payment",
-      description: "Pembayaran tunai",
-      amount: 2000000,
-      date: new Date(2024, 0, 1),
-      balance: 4500000,
-    },
-    {
-      id: "TRX-005",
-      type: "payment",
-      description: "Pembayaran tunai",
-      amount: 2000000,
-      date: new Date(2023, 11, 20),
-      balance: 2500000,
-    },
-  ],
-  "CST-002": [
-    {
-      id: "TRX-006",
-      type: "credit",
-      description: "Kupon CPN-0088 - Sembako",
-      amount: 5000000,
-      date: new Date(2024, 0, 10),
-      balance: 8500000,
-    },
-    {
-      id: "TRX-007",
-      type: "payment",
-      description: "Pembayaran transfer",
-      amount: 3500000,
-      date: new Date(2024, 0, 5),
-      balance: 3500000,
-    },
-  ],
-  "CST-003": [
-    {
-      id: "TRX-008",
-      type: "credit",
-      description: "Kupon CPN-0087 - Pakaian",
-      amount: 1500000,
-      date: new Date(2024, 0, 5),
-      balance: 4800000,
-    },
-    {
-      id: "TRX-009",
-      type: "payment",
-      description: "Pembayaran sebagian",
-      amount: 500000,
-      date: new Date(2023, 11, 28),
-      balance: 3300000,
-    },
-  ],
-};
+import { useCustomers, Customer } from "@/hooks/useCustomers";
+import { useInvoiceDetails } from "@/hooks/useInvoiceDetails";
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat("id-ID", {
@@ -147,8 +19,13 @@ const formatCurrency = (amount: number) => {
 };
 
 export default function CustomerHistory() {
+  const { data: customers = [], isLoading: customersLoading } = useCustomers();
+  const { data: invoices = [], isLoading: invoicesLoading } = useInvoiceDetails();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  const isLoading = customersLoading || invoicesLoading;
 
   const filteredCustomers = customers.filter(
     (c) =>
@@ -156,9 +33,44 @@ export default function CustomerHistory() {
       c.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const transactions = selectedCustomer
-    ? transactionHistory[selectedCustomer.id] || []
+  // Get customer statistics
+  const getCustomerStats = (customerId: string) => {
+    const customerInvoices = invoices.filter(inv => inv.customer_id === customerId);
+    const totalCredit = customerInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
+    const totalPaid = customerInvoices.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
+    const remaining = totalCredit - totalPaid;
+    const hasOverdue = customerInvoices.some(inv => inv.status === "overdue" || inv.status === "unpaid");
+    return { totalCredit, totalPaid, remaining, hasOverdue };
+  };
+
+  // Get transactions for selected customer
+  const customerTransactions = selectedCustomer
+    ? invoices
+        .filter(inv => inv.customer_id === selectedCustomer.id)
+        .map(inv => ({
+          id: inv.coupon_id,
+          no_faktur: inv.no_faktur,
+          type: "credit" as const,
+          description: `Kupon ${inv.no_faktur} - Angsuran ${inv.installment_index}`,
+          amount: Number(inv.amount),
+          paidAmount: Number(inv.paid_amount || 0),
+          date: new Date(inv.due_date),
+          status: inv.status,
+        }))
+        .sort((a, b) => b.date.getTime() - a.date.getTime())
     : [];
+
+  const selectedCustomerStats = selectedCustomer ? getCustomerStats(selectedCustomer.id) : null;
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -180,38 +92,44 @@ export default function CustomerHistory() {
             />
           </div>
 
-          <div className="space-y-2">
-            {filteredCustomers.map((customer) => (
-              <Card
-                key={customer.id}
-                className={cn(
-                  "p-4 cursor-pointer transition-all hover:border-primary/50",
-                  selectedCustomer?.id === customer.id && "border-primary bg-primary/5"
-                )}
-                onClick={() => setSelectedCustomer(customer)}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium">{customer.name}</p>
-                    <p className="text-xs text-muted-foreground">{customer.id}</p>
+          <div className="space-y-2 max-h-[600px] overflow-y-auto">
+            {filteredCustomers.map((customer) => {
+              const stats = getCustomerStats(customer.id);
+              return (
+                <Card
+                  key={customer.id}
+                  className={cn(
+                    "p-4 cursor-pointer transition-all hover:border-primary/50",
+                    selectedCustomer?.id === customer.id && "border-primary bg-primary/5"
+                  )}
+                  onClick={() => setSelectedCustomer(customer)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-medium">{customer.name}</p>
+                      <p className="text-xs text-muted-foreground">{customer.id.slice(0, 8)}</p>
+                    </div>
+                    <StatusBadge
+                      variant={stats.hasOverdue ? "danger" : "success"}
+                    >
+                      {stats.hasOverdue ? "Menunggak" : "Baik"}
+                    </StatusBadge>
                   </div>
-                  <StatusBadge
-                    variant={customer.creditScore === "good" ? "success" : "danger"}
-                  >
-                    {customer.creditScore === "good" ? "Baik" : "Buruk"}
-                  </StatusBadge>
-                </div>
-                <div className="mt-2 text-sm text-muted-foreground">
-                  Sisa: {formatCurrency(customer.totalCredit - customer.totalPaid)}
-                </div>
-              </Card>
-            ))}
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    Sisa: {formatCurrency(stats.remaining)}
+                  </div>
+                </Card>
+              );
+            })}
+            {filteredCustomers.length === 0 && (
+              <p className="text-center text-muted-foreground py-4">Tidak ada pelanggan ditemukan</p>
+            )}
           </div>
         </div>
 
         {/* Customer Profile & History */}
         <div className="lg:col-span-2 space-y-6">
-          {selectedCustomer ? (
+          {selectedCustomer && selectedCustomerStats ? (
             <>
               {/* Profile Section */}
               <Card className="p-6">
@@ -222,45 +140,49 @@ export default function CustomerHistory() {
                     </div>
                     <div>
                       <h2 className="text-xl font-semibold">{selectedCustomer.name}</h2>
-                      <p className="text-sm text-muted-foreground">{selectedCustomer.id}</p>
+                      <p className="text-sm text-muted-foreground">{selectedCustomer.id.slice(0, 8)}</p>
                     </div>
                   </div>
                   <StatusBadge
-                    variant={selectedCustomer.creditScore === "good" ? "success" : "danger"}
+                    variant={selectedCustomerStats.hasOverdue ? "danger" : "success"}
                     className="text-sm px-4 py-1"
                   >
-                    Skor Kredit: {selectedCustomer.creditScore === "good" ? "Baik" : "Buruk"}
+                    Status: {selectedCustomerStats.hasOverdue ? "Menunggak" : "Baik"}
                   </StatusBadge>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedCustomer.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span className="truncate">{selectedCustomer.address}</span>
-                  </div>
+                  {selectedCustomer.phone && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <span>{selectedCustomer.phone}</span>
+                    </div>
+                  )}
+                  {selectedCustomer.address && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      <span className="truncate">{selectedCustomer.address}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-muted/50 rounded-lg p-4">
                     <p className="text-xs text-muted-foreground mb-1">Total Kredit</p>
                     <p className="text-lg font-semibold font-mono">
-                      {formatCurrency(selectedCustomer.totalCredit)}
+                      {formatCurrency(selectedCustomerStats.totalCredit)}
                     </p>
                   </div>
                   <div className="bg-success-muted rounded-lg p-4">
                     <p className="text-xs text-success mb-1">Total Dibayar</p>
                     <p className="text-lg font-semibold font-mono text-success">
-                      {formatCurrency(selectedCustomer.totalPaid)}
+                      {formatCurrency(selectedCustomerStats.totalPaid)}
                     </p>
                   </div>
                   <div className="bg-danger-muted rounded-lg p-4">
                     <p className="text-xs text-danger mb-1">Sisa Piutang</p>
                     <p className="text-lg font-semibold font-mono text-danger">
-                      {formatCurrency(selectedCustomer.totalCredit - selectedCustomer.totalPaid)}
+                      {formatCurrency(selectedCustomerStats.remaining)}
                     </p>
                   </div>
                 </div>
@@ -270,52 +192,50 @@ export default function CustomerHistory() {
               <Card className="p-6">
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
                   <CreditCard className="h-5 w-5 text-primary" />
-                  Riwayat Transaksi
+                  Riwayat Kupon
                 </h3>
 
                 <div className="space-y-1">
-                  {transactions.map((trx, index) => (
-                    <div
-                      key={trx.id}
-                      className={cn(
-                        "flex items-center gap-4 py-3 px-3 rounded-lg transition-colors hover:bg-muted/50",
-                        index !== transactions.length - 1 && "border-b"
-                      )}
-                    >
+                  {customerTransactions.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-4">Belum ada transaksi</p>
+                  ) : (
+                    customerTransactions.map((trx, index) => (
                       <div
+                        key={trx.id}
                         className={cn(
-                          "h-10 w-10 rounded-full flex items-center justify-center shrink-0",
-                          trx.type === "credit" ? "bg-danger-muted" : "bg-success-muted"
+                          "flex items-center gap-4 py-3 px-3 rounded-lg transition-colors hover:bg-muted/50",
+                          index !== customerTransactions.length - 1 && "border-b"
                         )}
                       >
-                        {trx.type === "credit" ? (
-                          <ArrowUpRight className="h-5 w-5 text-danger" />
-                        ) : (
-                          <ArrowDownLeft className="h-5 w-5 text-success" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{trx.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(trx.date, "dd MMM yyyy")}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p
+                        <div
                           className={cn(
-                            "font-mono font-semibold",
-                            trx.type === "credit" ? "text-danger" : "text-success"
+                            "h-10 w-10 rounded-full flex items-center justify-center shrink-0",
+                            trx.paidAmount >= trx.amount ? "bg-success-muted" : "bg-warning-muted"
                           )}
                         >
-                          {trx.type === "credit" ? "+" : "-"}
-                          {formatCurrency(trx.amount)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Saldo: {formatCurrency(trx.balance)}
-                        </p>
+                          {trx.paidAmount >= trx.amount ? (
+                            <ArrowDownLeft className="h-5 w-5 text-success" />
+                          ) : (
+                            <ArrowUpRight className="h-5 w-5 text-warning" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{trx.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Jatuh tempo: {format(trx.date, "dd MMM yyyy")}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-mono font-semibold text-info">
+                            {formatCurrency(trx.amount)}
+                          </p>
+                          <p className="text-xs text-success">
+                            Bayar: {formatCurrency(trx.paidAmount)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </Card>
             </>

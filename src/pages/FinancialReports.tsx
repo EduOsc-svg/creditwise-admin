@@ -21,33 +21,12 @@ import {
   Download,
   Calendar,
   Filter,
+  Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { collectors, areas } from "@/data/collectors";
-
-interface Transaction {
-  id: string;
-  date: Date;
-  type: "issuance" | "payment";
-  referenceId: string;
-  customerName: string;
-  amount: number;
-  collector?: string;
-}
-
-const transactions: Transaction[] = [
-  { id: "1", date: new Date(2024, 0, 15), type: "issuance", referenceId: "CPN-0089", customerName: "Budi Santoso", amount: 2500000 },
-  { id: "2", date: new Date(2024, 0, 15), type: "payment", referenceId: "PAY-0421", customerName: "Siti Rahayu", amount: 1200000, collector: "Agus Hermawan" },
-  { id: "3", date: new Date(2024, 0, 14), type: "payment", referenceId: "PAY-0420", customerName: "Ahmad Yani", amount: 500000, collector: "Budi Pratama" },
-  { id: "4", date: new Date(2024, 0, 14), type: "issuance", referenceId: "CPN-0088", customerName: "Siti Rahayu", amount: 5000000 },
-  { id: "5", date: new Date(2024, 0, 13), type: "payment", referenceId: "PAY-0419", customerName: "Dewi Lestari", amount: 3000000, collector: "Agus Hermawan" },
-  { id: "6", date: new Date(2024, 0, 13), type: "issuance", referenceId: "CPN-0087", customerName: "Ahmad Yani", amount: 1500000 },
-  { id: "7", date: new Date(2024, 0, 12), type: "payment", referenceId: "PAY-0418", customerName: "Joko Widodo", amount: 2000000, collector: "Cahya Putra" },
-  { id: "8", date: new Date(2024, 0, 12), type: "issuance", referenceId: "CPN-0086", customerName: "Dewi Lestari", amount: 3000000 },
-  { id: "9", date: new Date(2024, 0, 11), type: "payment", referenceId: "PAY-0417", customerName: "Rina Susanti", amount: 1500000, collector: "Dedi Kurniawan" },
-  { id: "10", date: new Date(2024, 0, 11), type: "issuance", referenceId: "CPN-0085", customerName: "Rina Susanti", amount: 4000000 },
-];
+import { useInvoiceDetails, InvoiceDetail } from "@/hooks/useInvoiceDetails";
+import { useSalesAgents } from "@/hooks/useSalesAgents";
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat("id-ID", {
@@ -58,32 +37,36 @@ const formatCurrency = (amount: number) => {
 };
 
 export default function FinancialReports() {
+  const { data: invoices = [], isLoading } = useInvoiceDetails();
+  const { data: salesAgents = [] } = useSalesAgents();
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [selectedArea, setSelectedArea] = useState("all");
-  const [selectedCollector, setSelectedCollector] = useState("all");
+  const [selectedSales, setSelectedSales] = useState("all");
+
+  // Filter invoices based on criteria
+  const filteredInvoices = invoices.filter((inv) => {
+    if (selectedSales !== "all" && inv.sales_id !== selectedSales) return false;
+    if (startDate && inv.due_date < startDate) return false;
+    if (endDate && inv.due_date > endDate) return false;
+    return true;
+  });
 
   // Calculate summary metrics
-  const totalOmset = transactions
-    .filter((t) => t.type === "issuance")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalCollected = transactions
-    .filter((t) => t.type === "payment")
-    .reduce((sum, t) => sum + t.amount, 0);
-
+  const totalOmset = filteredInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
+  const totalCollected = filteredInvoices.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
   const collectionRate = totalOmset > 0 ? (totalCollected / totalOmset) * 100 : 0;
 
   const handleExport = () => {
-    // Simulate CSV export
-    const headers = ["Tanggal", "Tipe", "Referensi", "Pelanggan", "Jumlah", "Kolektor"];
-    const rows = transactions.map((t) => [
-      format(t.date, "yyyy-MM-dd"),
-      t.type === "issuance" ? "Penerbitan" : "Pembayaran",
-      t.referenceId,
-      t.customerName,
-      t.amount.toString(),
-      t.collector || "-",
+    const headers = ["No Faktur", "Tanggal", "Pelanggan", "Sales", "Tagihan", "Terbayar", "Status"];
+    const rows = filteredInvoices.map((inv) => [
+      inv.no_faktur,
+      inv.due_date,
+      inv.customer_name,
+      inv.sales_name,
+      inv.amount.toString(),
+      (inv.paid_amount || 0).toString(),
+      inv.status,
     ]);
     
     const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
@@ -98,59 +81,99 @@ export default function FinancialReports() {
     toast.success("Laporan berhasil diekspor ke CSV");
   };
 
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case "paid": return "success";
+      case "partial": return "warning";
+      case "overdue":
+      case "unpaid": return "danger";
+      default: return "default";
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "paid": return "Lunas";
+      case "partial": return "Sebagian";
+      case "overdue": return "Menunggak";
+      case "unpaid": return "Belum Bayar";
+      default: return status;
+    }
+  };
+
   const columns = [
     {
-      key: "date",
-      header: "Tanggal",
+      key: "due_date",
+      header: "Jatuh Tempo",
       className: "w-28",
-      render: (item: Transaction) => (
-        <span className="text-muted-foreground">{format(item.date, "dd MMM yyyy")}</span>
+      render: (item: InvoiceDetail) => (
+        <span className="text-muted-foreground">{format(new Date(item.due_date), "dd MMM yyyy")}</span>
       ),
     },
     {
-      key: "type",
-      header: "Tipe",
-      className: "w-28",
-      render: (item: Transaction) => (
-        <StatusBadge variant={item.type === "issuance" ? "info" : "success"}>
-          {item.type === "issuance" ? "Penerbitan" : "Pembayaran"}
-        </StatusBadge>
+      key: "no_faktur",
+      header: "No Faktur",
+      className: "w-36",
+      render: (item: InvoiceDetail) => (
+        <span className="font-mono text-xs">{item.no_faktur}</span>
       ),
     },
     {
-      key: "referenceId",
-      header: "Referensi",
-      className: "w-28",
-      render: (item: Transaction) => (
-        <span className="font-mono text-sm">{item.referenceId}</span>
-      ),
-    },
-    {
-      key: "customerName",
+      key: "customer_name",
       header: "Pelanggan",
-      render: (item: Transaction) => (
-        <span className="font-medium">{item.customerName}</span>
+      render: (item: InvoiceDetail) => (
+        <span className="font-medium">{item.customer_name}</span>
+      ),
+    },
+    {
+      key: "sales_name",
+      header: "Sales",
+      className: "w-32",
+      render: (item: InvoiceDetail) => (
+        <span className="text-muted-foreground">{item.sales_name}</span>
       ),
     },
     {
       key: "amount",
-      header: "Jumlah",
-      className: "text-right w-36",
-      render: (item: Transaction) => (
-        <span className={`font-mono font-semibold ${item.type === "issuance" ? "text-info" : "text-success"}`}>
-          {item.type === "issuance" ? "-" : "+"}{formatCurrency(item.amount)}
+      header: "Tagihan",
+      className: "text-right w-32",
+      render: (item: InvoiceDetail) => (
+        <span className="font-mono font-semibold text-info">
+          {formatCurrency(Number(item.amount))}
         </span>
       ),
     },
     {
-      key: "collector",
-      header: "Kolektor",
-      className: "w-36",
-      render: (item: Transaction) => (
-        <span className="text-muted-foreground">{item.collector || "-"}</span>
+      key: "paid_amount",
+      header: "Terbayar",
+      className: "text-right w-32",
+      render: (item: InvoiceDetail) => (
+        <span className="font-mono font-semibold text-success">
+          {formatCurrency(Number(item.paid_amount || 0))}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-28",
+      render: (item: InvoiceDetail) => (
+        <StatusBadge variant={getStatusVariant(item.status)}>
+          {getStatusLabel(item.status)}
+        </StatusBadge>
       ),
     },
   ];
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -193,32 +216,16 @@ export default function FinancialReports() {
             </div>
           </div>
           <div className="space-y-2">
-            <Label className="text-xs">Area</Label>
-            <Select value={selectedArea} onValueChange={setSelectedArea}>
+            <Label className="text-xs">Sales</Label>
+            <Select value={selectedSales} onValueChange={setSelectedSales}>
               <SelectTrigger>
-                <SelectValue placeholder="Semua Area" />
+                <SelectValue placeholder="Semua Sales" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Semua Area</SelectItem>
-                {areas.map((area) => (
-                  <SelectItem key={area} value={area}>
-                    {area}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Kolektor</Label>
-            <Select value={selectedCollector} onValueChange={setSelectedCollector}>
-              <SelectTrigger>
-                <SelectValue placeholder="Semua Kolektor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Kolektor</SelectItem>
-                {collectors.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
+                <SelectItem value="all">Semua Sales</SelectItem>
+                {salesAgents.map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>
+                    {agent.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -234,7 +241,6 @@ export default function FinancialReports() {
           value={formatCurrency(totalOmset)}
           subtitle="Nilai kupon diterbitkan"
           icon={TrendingUp}
-          trend={{ value: "Credit disbursed", positive: false }}
           className="border-l-4 border-l-info"
         />
         <MetricCard
@@ -242,7 +248,6 @@ export default function FinancialReports() {
           value={formatCurrency(totalCollected)}
           subtitle="Uang masuk dari pelanggan"
           icon={TrendingDown}
-          trend={{ value: "Cash collected", positive: true }}
           className="border-l-4 border-l-success"
         />
         <MetricCard
@@ -250,7 +255,6 @@ export default function FinancialReports() {
           value={`${collectionRate.toFixed(1)}%`}
           subtitle="Rasio penagihan"
           icon={Percent}
-          trend={{ value: collectionRate >= 80 ? "Baik" : "Perlu perhatian", positive: collectionRate >= 80 }}
           className="border-l-4 border-l-primary"
         />
       </div>
@@ -259,9 +263,9 @@ export default function FinancialReports() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-foreground">Detail Transaksi</h2>
-          <span className="text-sm text-muted-foreground">{transactions.length} transaksi</span>
+          <span className="text-sm text-muted-foreground">{filteredInvoices.length} transaksi</span>
         </div>
-        <DataTable columns={columns} data={transactions} />
+        <DataTable columns={columns} data={filteredInvoices} />
       </div>
     </MainLayout>
   );

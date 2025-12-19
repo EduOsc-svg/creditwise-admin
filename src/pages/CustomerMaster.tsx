@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { DataTable } from "@/components/ui/data-table";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,142 +19,56 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Phone, MapPin, Edit, Trash2, User } from "lucide-react";
-import { toast } from "sonner";
-import { collectors, areas } from "@/data/collectors";
-
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  address: string;
-  area: string;
-  assignedCollectorId: string;
-  creditLimit: number;
-  outstandingDebt: number;
-  status: string;
-  creditScore: string;
-}
-
-const initialCustomers: Customer[] = [
-  {
-    id: "CST-001",
-    name: "Budi Santoso",
-    phone: "081234567890",
-    address: "Jl. Merdeka No. 123, Jakarta Selatan",
-    area: "Jakarta Selatan",
-    assignedCollectorId: "COL-001",
-    creditLimit: 10000000,
-    outstandingDebt: 2500000,
-    status: "active",
-    creditScore: "good",
-  },
-  {
-    id: "CST-002",
-    name: "Siti Rahayu",
-    phone: "082345678901",
-    address: "Jl. Sudirman No. 45, Jakarta Pusat",
-    area: "Jakarta Pusat",
-    assignedCollectorId: "COL-002",
-    creditLimit: 15000000,
-    outstandingDebt: 8500000,
-    status: "active",
-    creditScore: "good",
-  },
-  {
-    id: "CST-003",
-    name: "Ahmad Yani",
-    phone: "083456789012",
-    address: "Jl. Gatot Subroto No. 67, Jakarta Timur",
-    area: "Jakarta Timur",
-    assignedCollectorId: "COL-003",
-    creditLimit: 5000000,
-    outstandingDebt: 4800000,
-    status: "warning",
-    creditScore: "bad",
-  },
-  {
-    id: "CST-004",
-    name: "Dewi Lestari",
-    phone: "084567890123",
-    address: "Jl. Kemang Raya No. 89, Jakarta Selatan",
-    area: "Jakarta Selatan",
-    assignedCollectorId: "COL-001",
-    creditLimit: 20000000,
-    outstandingDebt: 0,
-    status: "active",
-    creditScore: "good",
-  },
-  {
-    id: "CST-005",
-    name: "Joko Widodo",
-    phone: "085678901234",
-    address: "Jl. Thamrin No. 12, Jakarta Pusat",
-    area: "Jakarta Pusat",
-    assignedCollectorId: "COL-002",
-    creditLimit: 8000000,
-    outstandingDebt: 8000000,
-    status: "blocked",
-    creditScore: "bad",
-  },
-];
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(amount);
-};
-
-const getCollectorName = (collectorId: string) => {
-  const collector = collectors.find((c) => c.id === collectorId);
-  return collector?.name || "-";
-};
+import { Plus, Search, Phone, MapPin, Edit, Trash2, Loader2, User } from "lucide-react";
+import { useCustomers, useCreateCustomer, useDeleteCustomer, Customer } from "@/hooks/useCustomers";
+import { useSalesAgents } from "@/hooks/useSalesAgents";
 
 export default function CustomerMaster() {
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const { data: customers = [], isLoading } = useCustomers();
+  const { data: salesAgents = [] } = useSalesAgents();
+  const createCustomer = useCreateCustomer();
+  const deleteCustomer = useDeleteCustomer();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     phone: "",
     address: "",
-    area: "",
-    assignedCollectorId: "",
-    creditLimit: "",
+    assigned_sales_id: "",
   });
 
   const filteredCustomers = customers.filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.area.toLowerCase().includes(searchQuery.toLowerCase())
+      (c.address?.toLowerCase() || "").includes(searchQuery.toLowerCase())
   );
 
-  const handleAddCustomer = () => {
-    if (!newCustomer.name || !newCustomer.phone) {
-      toast.error("Nama dan nomor telepon wajib diisi");
+  const getSalesName = (salesId: string | null) => {
+    if (!salesId) return "-";
+    const agent = salesAgents.find((a) => a.id === salesId);
+    return agent?.name || "-";
+  };
+
+  const handleAddCustomer = async () => {
+    if (!newCustomer.name) {
       return;
     }
 
-    const customer: Customer = {
-      id: `CST-${String(customers.length + 1).padStart(3, "0")}`,
+    await createCustomer.mutateAsync({
       name: newCustomer.name,
-      phone: newCustomer.phone,
-      address: newCustomer.address,
-      area: newCustomer.area,
-      assignedCollectorId: newCustomer.assignedCollectorId,
-      creditLimit: parseInt(newCustomer.creditLimit) || 0,
-      outstandingDebt: 0,
-      status: "active",
-      creditScore: "good",
-    };
+      phone: newCustomer.phone || null,
+      address: newCustomer.address || null,
+      assigned_sales_id: newCustomer.assigned_sales_id || null,
+    });
 
-    setCustomers([...customers, customer]);
-    setNewCustomer({ name: "", phone: "", address: "", area: "", assignedCollectorId: "", creditLimit: "" });
+    setNewCustomer({ name: "", phone: "", address: "", assigned_sales_id: "" });
     setIsDialogOpen(false);
-    toast.success("Pelanggan berhasil ditambahkan");
+  };
+
+  const handleDelete = async (customer: Customer) => {
+    await deleteCustomer.mutateAsync(customer.id);
   };
 
   const columns = [
@@ -164,7 +77,7 @@ export default function CustomerMaster() {
       header: "ID",
       className: "w-24",
       render: (item: Customer) => (
-        <span className="font-mono text-xs">{item.id}</span>
+        <span className="font-mono text-xs">{item.id.slice(0, 8)}</span>
       ),
     },
     {
@@ -173,79 +86,67 @@ export default function CustomerMaster() {
       render: (item: Customer) => (
         <div>
           <p className="font-medium">{item.name}</p>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-            <Phone className="h-3 w-3" />
-            {item.phone}
-          </div>
+          {item.phone && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+              <Phone className="h-3 w-3" />
+              {item.phone}
+            </div>
+          )}
         </div>
       ),
     },
     {
-      key: "area",
-      header: "Area",
-      className: "w-32",
+      key: "address",
+      header: "Alamat",
       render: (item: Customer) => (
         <div className="flex items-center gap-1 text-sm">
           <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-          {item.area}
+          <span className="truncate max-w-[200px]">{item.address || "-"}</span>
         </div>
       ),
     },
     {
-      key: "assignedCollector",
-      header: "Kolektor",
+      key: "assigned_sales",
+      header: "Sales",
       className: "w-36",
       render: (item: Customer) => (
         <div className="flex items-center gap-1.5 text-sm">
           <User className="h-3.5 w-3.5 text-muted-foreground" />
-          <span>{getCollectorName(item.assignedCollectorId)}</span>
+          <span>{getSalesName(item.assigned_sales_id)}</span>
         </div>
-      ),
-    },
-    {
-      key: "creditLimit",
-      header: "Limit Kredit",
-      className: "text-right",
-      render: (item: Customer) => (
-        <span className="font-mono">{formatCurrency(item.creditLimit)}</span>
-      ),
-    },
-    {
-      key: "outstandingDebt",
-      header: "Piutang",
-      className: "text-right",
-      render: (item: Customer) => (
-        <span className={`font-mono ${item.outstandingDebt > 0 ? "text-danger" : "text-success"}`}>
-          {formatCurrency(item.outstandingDebt)}
-        </span>
-      ),
-    },
-    {
-      key: "creditScore",
-      header: "Skor",
-      className: "w-20",
-      render: (item: Customer) => (
-        <StatusBadge variant={item.creditScore === "good" ? "success" : "danger"}>
-          {item.creditScore === "good" ? "Baik" : "Buruk"}
-        </StatusBadge>
       ),
     },
     {
       key: "actions",
       header: "",
       className: "w-20",
-      render: () => (
+      render: (item: Customer) => (
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-8 w-8">
             <Edit className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-danger hover:text-danger">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 text-danger hover:text-danger"
+            onClick={() => handleDelete(item)}
+          >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       ),
     },
   ];
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -271,7 +172,7 @@ export default function CustomerMaster() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Nomor Telepon *</Label>
+                <Label>Nomor Telepon</Label>
                 <Input
                   placeholder="08xxxxxxxxxx"
                   value={newCustomer.phone}
@@ -286,54 +187,32 @@ export default function CustomerMaster() {
                   onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Area *</Label>
-                  <Select
-                    value={newCustomer.area}
-                    onValueChange={(value) => setNewCustomer({ ...newCustomer, area: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih area" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {areas.map((area) => (
-                        <SelectItem key={area} value={area}>
-                          {area}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Kolektor *</Label>
-                  <Select
-                    value={newCustomer.assignedCollectorId}
-                    onValueChange={(value) => setNewCustomer({ ...newCustomer, assignedCollectorId: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih kolektor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {collectors.map((collector) => (
-                        <SelectItem key={collector.id} value={collector.id}>
-                          {collector.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
               <div className="space-y-2">
-                <Label>Limit Kredit</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={newCustomer.creditLimit}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, creditLimit: e.target.value })}
-                />
+                <Label>Sales</Label>
+                <Select
+                  value={newCustomer.assigned_sales_id}
+                  onValueChange={(value) => setNewCustomer({ ...newCustomer, assigned_sales_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih sales" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {salesAgents.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.name} ({agent.agent_code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Button onClick={handleAddCustomer} className="w-full">
+              <Button 
+                onClick={handleAddCustomer} 
+                className="w-full"
+                disabled={createCustomer.isPending}
+              >
+                {createCustomer.isPending && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
                 Simpan Pelanggan
               </Button>
             </div>
@@ -345,7 +224,7 @@ export default function CustomerMaster() {
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Cari nama, ID, atau area..."
+            placeholder="Cari nama, ID, atau alamat..."
             className="pl-9"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

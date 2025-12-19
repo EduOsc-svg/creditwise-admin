@@ -11,17 +11,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Phone, MapPin, Edit, Trash2, Users } from "lucide-react";
-import { toast } from "sonner";
-import { collectors as initialCollectors, areas, Collector } from "@/data/collectors";
+import { Plus, Search, Phone, MapPin, Edit, Trash2, Loader2 } from "lucide-react";
+import { useSalesAgents, useCreateSalesAgent, useUpdateSalesAgent, useDeleteSalesAgent, SalesAgent } from "@/hooks/useSalesAgents";
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat("id-ID", {
@@ -32,134 +24,114 @@ const formatCurrency = (amount: number) => {
 };
 
 export default function CollectorManagement() {
-  const [collectors, setCollectors] = useState<Collector[]>(initialCollectors);
+  const { data: salesAgents = [], isLoading } = useSalesAgents();
+  const createAgent = useCreateSalesAgent();
+  const updateAgent = useUpdateSalesAgent();
+  const deleteAgent = useDeleteSalesAgent();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingCollector, setEditingCollector] = useState<Collector | null>(null);
+  const [editingAgent, setEditingAgent] = useState<SalesAgent | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
-    assignedArea: "",
+    area: "",
+    agent_code: "",
   });
 
-  const filteredCollectors = collectors.filter(
+  const filteredAgents = salesAgents.filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.assignedArea.toLowerCase().includes(searchQuery.toLowerCase())
+      c.agent_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.area?.toLowerCase() || "").includes(searchQuery.toLowerCase())
   );
 
-  const handleOpenDialog = (collector?: Collector) => {
-    if (collector) {
-      setEditingCollector(collector);
+  const handleOpenDialog = (agent?: SalesAgent) => {
+    if (agent) {
+      setEditingAgent(agent);
       setFormData({
-        name: collector.name,
-        phone: collector.phone,
-        assignedArea: collector.assignedArea,
+        name: agent.name,
+        phone: agent.phone || "",
+        area: agent.area || "",
+        agent_code: agent.agent_code,
       });
     } else {
-      setEditingCollector(null);
-      setFormData({ name: "", phone: "", assignedArea: "" });
+      setEditingAgent(null);
+      setFormData({ name: "", phone: "", area: "", agent_code: "" });
     }
     setIsDialogOpen(true);
   };
 
-  const handleSave = () => {
-    if (!formData.name || !formData.phone || !formData.assignedArea) {
-      toast.error("Semua field wajib diisi");
+  const handleSave = async () => {
+    if (!formData.name || !formData.agent_code) {
       return;
     }
 
-    if (editingCollector) {
-      setCollectors((prev) =>
-        prev.map((c) =>
-          c.id === editingCollector.id
-            ? { ...c, name: formData.name, phone: formData.phone, assignedArea: formData.assignedArea }
-            : c
-        )
-      );
-      toast.success("Data kolektor berhasil diperbarui");
-    } else {
-      const newCollector: Collector = {
-        id: `COL-${String(collectors.length + 1).padStart(3, "0")}`,
+    if (editingAgent) {
+      await updateAgent.mutateAsync({
+        id: editingAgent.id,
         name: formData.name,
-        phone: formData.phone,
-        assignedArea: formData.assignedArea,
-        totalCollected: 0,
-        activeCustomers: 0,
-      };
-      setCollectors([...collectors, newCollector]);
-      toast.success("Kolektor berhasil ditambahkan");
+        phone: formData.phone || null,
+        area: formData.area || null,
+        agent_code: formData.agent_code,
+      });
+    } else {
+      await createAgent.mutateAsync({
+        name: formData.name,
+        phone: formData.phone || null,
+        area: formData.area || null,
+        agent_code: formData.agent_code,
+      });
     }
 
     setIsDialogOpen(false);
-    setFormData({ name: "", phone: "", assignedArea: "" });
-    setEditingCollector(null);
+    setFormData({ name: "", phone: "", area: "", agent_code: "" });
+    setEditingAgent(null);
   };
 
-  const handleDelete = (collector: Collector) => {
-    setCollectors((prev) => prev.filter((c) => c.id !== collector.id));
-    toast.success("Kolektor berhasil dihapus");
+  const handleDelete = async (agent: SalesAgent) => {
+    await deleteAgent.mutateAsync(agent.id);
   };
 
   const columns = [
     {
-      key: "id",
-      header: "ID",
+      key: "agent_code",
+      header: "Kode",
       className: "w-24",
-      render: (item: Collector) => (
-        <span className="font-mono text-xs">{item.id}</span>
+      render: (item: SalesAgent) => (
+        <span className="font-mono text-xs">{item.agent_code}</span>
       ),
     },
     {
       key: "name",
-      header: "Nama Kolektor",
-      render: (item: Collector) => (
+      header: "Nama Sales",
+      render: (item: SalesAgent) => (
         <div>
           <p className="font-medium">{item.name}</p>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-            <Phone className="h-3 w-3" />
-            {item.phone}
-          </div>
+          {item.phone && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+              <Phone className="h-3 w-3" />
+              {item.phone}
+            </div>
+          )}
         </div>
       ),
     },
     {
-      key: "assignedArea",
-      header: "Area Tugas",
-      render: (item: Collector) => (
+      key: "area",
+      header: "Area",
+      render: (item: SalesAgent) => (
         <div className="flex items-center gap-1.5">
           <MapPin className="h-4 w-4 text-muted-foreground" />
-          <span>{item.assignedArea}</span>
+          <span>{item.area || "-"}</span>
         </div>
-      ),
-    },
-    {
-      key: "activeCustomers",
-      header: "Pelanggan",
-      className: "text-center w-28",
-      render: (item: Collector) => (
-        <div className="flex items-center justify-center gap-1">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium">{item.activeCustomers}</span>
-        </div>
-      ),
-    },
-    {
-      key: "totalCollected",
-      header: "Total Tagihan",
-      className: "text-right",
-      render: (item: Collector) => (
-        <span className="font-mono text-success font-medium">
-          {formatCurrency(item.totalCollected)}
-        </span>
       ),
     },
     {
       key: "actions",
       header: "",
       className: "w-24",
-      render: (item: Collector) => (
+      render: (item: SalesAgent) => (
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -182,33 +154,51 @@ export default function CollectorManagement() {
     },
   ];
 
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
+
   return (
     <MainLayout>
-      <PageHeader title="Manajemen Kolektor" description="Kelola data kolektor lapangan">
+      <PageHeader title="Manajemen Sales" description="Kelola data sales agent">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => handleOpenDialog()}>
               <Plus className="h-4 w-4 mr-2" />
-              Tambah Kolektor
+              Tambah Sales
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {editingCollector ? "Edit Kolektor" : "Tambah Kolektor Baru"}
+                {editingAgent ? "Edit Sales" : "Tambah Sales Baru"}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-4">
               <div className="space-y-2">
+                <Label>Kode Sales *</Label>
+                <Input
+                  placeholder="Contoh: S/DANIEL"
+                  value={formData.agent_code}
+                  onChange={(e) => setFormData({ ...formData, agent_code: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Nama Lengkap *</Label>
                 <Input
-                  placeholder="Masukkan nama kolektor"
+                  placeholder="Masukkan nama sales"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Nomor Telepon *</Label>
+                <Label>Nomor Telepon</Label>
                 <Input
                   placeholder="08xxxxxxxxxx"
                   value={formData.phone}
@@ -216,25 +206,22 @@ export default function CollectorManagement() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Area Tugas *</Label>
-                <Select
-                  value={formData.assignedArea}
-                  onValueChange={(value) => setFormData({ ...formData, assignedArea: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih area" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {areas.map((area) => (
-                      <SelectItem key={area} value={area}>
-                        {area}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Area</Label>
+                <Input
+                  placeholder="Contoh: Jakarta Selatan"
+                  value={formData.area}
+                  onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                />
               </div>
-              <Button onClick={handleSave} className="w-full">
-                {editingCollector ? "Simpan Perubahan" : "Tambah Kolektor"}
+              <Button 
+                onClick={handleSave} 
+                className="w-full"
+                disabled={createAgent.isPending || updateAgent.isPending}
+              >
+                {(createAgent.isPending || updateAgent.isPending) && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                {editingAgent ? "Simpan Perubahan" : "Tambah Sales"}
               </Button>
             </div>
           </DialogContent>
@@ -245,7 +232,7 @@ export default function CollectorManagement() {
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Cari nama, ID, atau area..."
+            placeholder="Cari nama, kode, atau area..."
             className="pl-9"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -253,10 +240,10 @@ export default function CollectorManagement() {
         </div>
       </div>
 
-      <DataTable columns={columns} data={filteredCollectors} />
+      <DataTable columns={columns} data={filteredAgents} />
 
       <div className="mt-4 text-sm text-muted-foreground">
-        Menampilkan {filteredCollectors.length} dari {collectors.length} kolektor
+        Menampilkan {filteredAgents.length} dari {salesAgents.length} sales
       </div>
     </MainLayout>
   );
