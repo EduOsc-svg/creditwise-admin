@@ -12,92 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Printer, Send, Filter, CheckCircle, AlertCircle, Clock, User } from "lucide-react";
+import { Printer, Filter, CheckCircle, AlertCircle, Clock, User, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { collectors, areas } from "@/data/collectors";
-
-interface Bill {
-  id: string;
-  customerId: string;
-  customerName: string;
-  area: string;
-  collectorId: string;
-  billAmount: number;
-  dueDate: Date;
-  amountPaid: number;
-  status: string;
-  overdueDate: Date | null;
-  nextCollectionDate: Date | null;
-}
-
-const initialBills: Bill[] = [
-  {
-    id: "BIL-001",
-    customerId: "CST-001",
-    customerName: "Budi Santoso",
-    area: "Jakarta Selatan",
-    collectorId: "COL-001",
-    billAmount: 2500000,
-    dueDate: new Date(2024, 0, 15),
-    amountPaid: 0,
-    status: "pending",
-    overdueDate: null,
-    nextCollectionDate: null,
-  },
-  {
-    id: "BIL-002",
-    customerId: "CST-002",
-    customerName: "Siti Rahayu",
-    area: "Jakarta Pusat",
-    collectorId: "COL-002",
-    billAmount: 1800000,
-    dueDate: new Date(2024, 0, 15),
-    amountPaid: 0,
-    status: "pending",
-    overdueDate: null,
-    nextCollectionDate: null,
-  },
-  {
-    id: "BIL-003",
-    customerId: "CST-003",
-    customerName: "Ahmad Yani",
-    area: "Jakarta Timur",
-    collectorId: "COL-003",
-    billAmount: 3200000,
-    dueDate: new Date(2024, 0, 15),
-    amountPaid: 0,
-    status: "pending",
-    overdueDate: null,
-    nextCollectionDate: null,
-  },
-  {
-    id: "BIL-004",
-    customerId: "CST-004",
-    customerName: "Dewi Lestari",
-    area: "Jakarta Selatan",
-    collectorId: "COL-001",
-    billAmount: 4500000,
-    dueDate: new Date(2024, 0, 16),
-    amountPaid: 0,
-    status: "pending",
-    overdueDate: null,
-    nextCollectionDate: null,
-  },
-  {
-    id: "BIL-005",
-    customerId: "CST-005",
-    customerName: "Joko Widodo",
-    area: "Jakarta Pusat",
-    collectorId: "COL-002",
-    billAmount: 2000000,
-    dueDate: new Date(2024, 0, 14),
-    amountPaid: 0,
-    status: "overdue",
-    overdueDate: new Date(2024, 0, 14),
-    nextCollectionDate: null,
-  },
-];
+import { useInvoiceDetails, useUpdateCouponPayment, InvoiceDetail } from "@/hooks/useInvoiceDetails";
+import { useSalesAgents } from "@/hooks/useSalesAgents";
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat("id-ID", {
@@ -107,71 +26,81 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
-const getCollectorName = (collectorId: string) => {
-  const collector = collectors.find((c) => c.id === collectorId);
-  return collector?.name || "-";
-};
-
 export default function CollectionBilling() {
-  const [bills, setBills] = useState<Bill[]>(initialBills);
-  const [selectedArea, setSelectedArea] = useState("all");
-  const [selectedCollector, setSelectedCollector] = useState("all");
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const { data: invoices = [], isLoading } = useInvoiceDetails();
+  const { data: salesAgents = [] } = useSalesAgents();
+  const updatePayment = useUpdateCouponPayment();
 
-  const filteredBills = bills.filter((bill) => {
-    if (selectedArea !== "all" && bill.area !== selectedArea) return false;
-    if (selectedCollector !== "all" && bill.collectorId !== selectedCollector) return false;
+  const [selectedSales, setSelectedSales] = useState("all");
+  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [paymentInputs, setPaymentInputs] = useState<Record<string, number>>({});
+
+  const filteredInvoices = invoices.filter((invoice) => {
+    if (selectedSales !== "all" && invoice.sales_id !== selectedSales) return false;
     return true;
   });
 
-  const selectedCollectorName = selectedCollector === "all" 
-    ? "Semua Kolektor" 
-    : getCollectorName(selectedCollector);
+  const selectedSalesName = selectedSales === "all" 
+    ? "Semua Sales" 
+    : salesAgents.find(s => s.id === selectedSales)?.name || "Sales";
 
   const handlePrintManifest = () => {
-    toast.success(`Mencetak manifest untuk ${selectedCollectorName}...`);
+    toast.success(`Mencetak manifest untuk ${selectedSalesName}...`);
   };
 
-  const handlePaymentChange = (billId: string, field: string, value: string | number | Date | null) => {
-    setBills((prev) =>
-      prev.map((bill) => {
-        if (bill.id === billId) {
-          const updated = { ...bill, [field]: value };
-          if (field === "amountPaid") {
-            const paid = Number(value);
-            if (paid >= bill.billAmount) {
-              updated.status = "paid";
-              // Set next collection date to tomorrow when paid
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              updated.nextCollectionDate = tomorrow;
-              updated.overdueDate = null;
-            } else if (paid > 0) {
-              updated.status = "partial";
-            } else {
-              updated.status = "pending";
-            }
-          }
-          if (field === "status" && value === "unpaid") {
-            // Set overdue date when marked as unpaid
-            updated.overdueDate = new Date();
-          }
-          return updated;
-        }
-        return bill;
-      })
+  const handlePaymentInput = (couponId: string, value: number) => {
+    setPaymentInputs(prev => ({ ...prev, [couponId]: value }));
+  };
+
+  const handleSavePayment = async (invoice: InvoiceDetail) => {
+    const paidAmount = paymentInputs[invoice.coupon_id] || 0;
+    let status = invoice.status;
+    
+    if (paidAmount >= invoice.amount) {
+      status = "paid";
+    } else if (paidAmount > 0) {
+      status = "partial";
+    }
+
+    await updatePayment.mutateAsync({
+      coupon_id: invoice.coupon_id,
+      paid_amount: paidAmount,
+      paid_date: paidAmount > 0 ? format(new Date(), "yyyy-MM-dd") : null,
+      status,
+    });
+  };
+
+  const totalBills = filteredInvoices.reduce((sum, b) => sum + Number(b.amount), 0);
+  const totalCollected = filteredInvoices.reduce((sum, b) => sum + Number(b.paid_amount || 0), 0);
+
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case "paid": return "success";
+      case "partial": return "warning";
+      case "overdue": return "danger";
+      default: return "default";
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "paid": return "Lunas";
+      case "partial": return "Sebagian";
+      case "overdue": return "Menunggak";
+      case "unpaid": return "Belum Bayar";
+      default: return status;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
     );
-  };
-
-  const handleSubmitCollection = () => {
-    const updated = bills.filter(
-      (b) => b.status === "paid" || b.status === "partial" || b.overdueDate
-    );
-    toast.success(`${updated.length} data penagihan berhasil disimpan`);
-  };
-
-  const totalBills = filteredBills.reduce((sum, b) => sum + b.billAmount, 0);
-  const totalCollected = filteredBills.reduce((sum, b) => sum + b.amountPaid, 0);
+  }
 
   return (
     <MainLayout>
@@ -200,32 +129,16 @@ export default function CollectionBilling() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Area</label>
-                <Select value={selectedArea} onValueChange={setSelectedArea}>
-                  <SelectTrigger className="w-44">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Area</SelectItem>
-                    {areas.map((area) => (
-                      <SelectItem key={area} value={area}>
-                        {area}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Kolektor</label>
-                <Select value={selectedCollector} onValueChange={setSelectedCollector}>
+                <label className="text-xs text-muted-foreground">Sales</label>
+                <Select value={selectedSales} onValueChange={setSelectedSales}>
                   <SelectTrigger className="w-48">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Semua Kolektor</SelectItem>
-                    {collectors.map((collector) => (
-                      <SelectItem key={collector.id} value={collector.id}>
-                        {collector.name}
+                    <SelectItem value="all">Semua Sales</SelectItem>
+                    {salesAgents.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -234,7 +147,7 @@ export default function CollectionBilling() {
               <div className="flex items-end">
                 <Button onClick={handlePrintManifest} className="gap-2">
                   <Printer className="h-4 w-4" />
-                  Print Manifest untuk {selectedCollectorName}
+                  Print Manifest untuk {selectedSalesName}
                 </Button>
               </div>
             </div>
@@ -246,13 +159,13 @@ export default function CollectionBilling() {
               <p className="text-xl font-semibold font-mono">{formatCurrency(totalBills)}</p>
             </div>
             <div className="bg-card rounded-xl border p-4">
-              <p className="text-sm text-muted-foreground">Jumlah Pelanggan</p>
-              <p className="text-xl font-semibold">{filteredBills.length}</p>
+              <p className="text-sm text-muted-foreground">Jumlah Kupon</p>
+              <p className="text-xl font-semibold">{filteredInvoices.length}</p>
             </div>
             <div className="bg-card rounded-xl border p-4">
               <p className="text-sm text-muted-foreground">Menunggak</p>
               <p className="text-xl font-semibold text-danger">
-                {filteredBills.filter((b) => b.status === "overdue").length}
+                {filteredInvoices.filter((b) => b.status === "overdue" || b.status === "unpaid").length}
               </p>
             </div>
           </div>
@@ -261,49 +174,39 @@ export default function CollectionBilling() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    No
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Pelanggan
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Alamat/Area
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Kolektor
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Tagihan
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Status
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">No</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">No Faktur</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pelanggan</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Jatuh Tempo</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tagihan</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filteredBills.map((bill, index) => (
-                  <tr key={bill.id} className="hover:bg-muted/30">
+                {filteredInvoices.map((invoice, index) => (
+                  <tr key={invoice.coupon_id} className="hover:bg-muted/30">
                     <td className="px-4 py-3 text-muted-foreground">{index + 1}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{invoice.no_faktur}</td>
                     <td className="px-4 py-3">
-                      <p className="font-medium">{bill.customerName}</p>
-                      <p className="text-xs text-muted-foreground">{bill.customerId}</p>
+                      <p className="font-medium">{invoice.customer_name}</p>
+                      <p className="text-xs text-muted-foreground">{invoice.customer_address}</p>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{bill.area}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 text-sm">
                         <User className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span>{getCollectorName(bill.collectorId)}</span>
+                        <span>{invoice.sales_name}</span>
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {format(new Date(invoice.due_date), "dd MMM yyyy")}
+                    </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold">
-                      {formatCurrency(bill.billAmount)}
+                      {formatCurrency(Number(invoice.amount))}
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge
-                        variant={bill.status === "overdue" ? "danger" : "default"}
-                      >
-                        {bill.status === "overdue" ? "Menunggak" : "Jatuh Tempo"}
+                      <StatusBadge variant={getStatusVariant(invoice.status)}>
+                        {getStatusLabel(invoice.status)}
                       </StatusBadge>
                     </td>
                   </tr>
@@ -317,22 +220,22 @@ export default function CollectionBilling() {
           <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
             <AlertCircle className="h-5 w-5 text-primary" />
             <p className="text-sm">
-              Masukkan hasil penagihan dari kolektor. Isi jumlah yang dibayar dan status untuk setiap pelanggan.
+              Masukkan hasil penagihan dari sales. Isi jumlah yang dibayar untuk setiap kupon.
             </p>
           </div>
 
           <div className="flex gap-4 mb-4">
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Filter Kolektor</label>
-              <Select value={selectedCollector} onValueChange={setSelectedCollector}>
+              <label className="text-xs text-muted-foreground">Filter Sales</label>
+              <Select value={selectedSales} onValueChange={setSelectedSales}>
                 <SelectTrigger className="w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Semua Kolektor</SelectItem>
-                  {collectors.map((collector) => (
-                    <SelectItem key={collector.id} value={collector.id}>
-                      {collector.name}
+                  <SelectItem value="all">Semua Sales</SelectItem>
+                  {salesAgents.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      {agent.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -357,125 +260,63 @@ export default function CollectionBilling() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-44">
-                    Pelanggan
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-36">
-                    Kolektor
-                  </th>
-                  <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground w-28">
-                    Tagihan
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-36">
-                    Jumlah Bayar
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-32">
-                    Status
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-36">
-                    Tanggal Nunggak
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground w-36">
-                    Penagihan Berikut
-                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">No Faktur</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pelanggan</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales</th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tagihan</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Jumlah Bayar</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filteredBills.map((bill) => (
-                  <tr key={bill.id} className="hover:bg-muted/30">
+                {filteredInvoices.map((invoice) => (
+                  <tr key={invoice.coupon_id} className="hover:bg-muted/30">
+                    <td className="px-3 py-2 font-mono text-xs">{invoice.no_faktur}</td>
                     <td className="px-3 py-2">
-                      <p className="font-medium">{bill.customerName}</p>
+                      <p className="font-medium">{invoice.customer_name}</p>
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                         <User className="h-3.5 w-3.5" />
-                        <span>{getCollectorName(bill.collectorId)}</span>
+                        <span>{invoice.sales_name}</span>
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right font-mono">
-                      {formatCurrency(bill.billAmount)}
+                      {formatCurrency(Number(invoice.amount))}
                     </td>
                     <td className="px-3 py-2">
                       <Input
                         type="number"
                         placeholder="0"
-                        value={bill.amountPaid || ""}
-                        onChange={(e) =>
-                          handlePaymentChange(bill.id, "amountPaid", Number(e.target.value))
-                        }
-                        className="h-8 font-mono"
+                        value={paymentInputs[invoice.coupon_id] || invoice.paid_amount || ""}
+                        onChange={(e) => handlePaymentInput(invoice.coupon_id, Number(e.target.value))}
+                        className="h-8 w-32 font-mono"
                       />
                     </td>
                     <td className="px-3 py-2">
-                      <Select
-                        value={bill.status}
-                        onValueChange={(value) => handlePaymentChange(bill.id, "status", value)}
+                      <StatusBadge variant={getStatusVariant(invoice.status)}>
+                        {getStatusLabel(invoice.status)}
+                      </StatusBadge>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSavePayment(invoice)}
+                        disabled={updatePayment.isPending}
                       >
-                        <SelectTrigger className="h-8 w-28">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" /> Pending
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="paid">
-                            <span className="flex items-center gap-1 text-success">
-                              <CheckCircle className="h-3 w-3" /> Lunas
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="partial">
-                            <span className="flex items-center gap-1 text-warning">
-                              <AlertCircle className="h-3 w-3" /> Sebagian
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="unpaid">
-                            <span className="flex items-center gap-1 text-danger">
-                              <AlertCircle className="h-3 w-3" /> Tidak Bayar
-                            </span>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="px-3 py-2">
-                      {bill.overdueDate ? (
-                        <span className="text-danger font-medium text-sm">
-                          {format(bill.overdueDate, "dd MMM yyyy")}
-                        </span>
-                      ) : bill.status === "unpaid" || bill.status === "overdue" ? (
-                        <Input
-                          type="date"
-                          value={bill.overdueDate ? format(bill.overdueDate, "yyyy-MM-dd") : ""}
-                          onChange={(e) =>
-                            handlePaymentChange(bill.id, "overdueDate", e.target.value ? new Date(e.target.value) : null)
-                          }
-                          className="h-8"
-                        />
-                      ) : (
-                        <span className="text-muted-foreground text-sm">-</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {bill.nextCollectionDate ? (
-                        <span className="text-success font-medium text-sm">
-                          {format(bill.nextCollectionDate, "dd MMM yyyy")}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">-</span>
-                      )}
+                        {updatePayment.isPending ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-3 w-3" />
+                        )}
+                      </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-
-          <div className="flex justify-end">
-            <Button onClick={handleSubmitCollection} size="lg" className="gap-2">
-              <Send className="h-4 w-4" />
-              Submit Penagihan Harian
-            </Button>
           </div>
         </TabsContent>
       </Tabs>
