@@ -14,85 +14,70 @@ export type Database = {
   }
   public: {
     Tables: {
-      collectors: {
+      credit_contracts: {
         Row: {
-          active_customers: number | null
-          assigned_area: string
-          collector_code: string
-          created_at: string
-          id: string
-          name: string
-          phone: string
-          total_collected: number | null
-          updated_at: string
-        }
-        Insert: {
-          active_customers?: number | null
-          assigned_area: string
-          collector_code: string
-          created_at?: string
-          id?: string
-          name: string
-          phone: string
-          total_collected?: number | null
-          updated_at?: string
-        }
-        Update: {
-          active_customers?: number | null
-          assigned_area?: string
-          collector_code?: string
-          created_at?: string
-          id?: string
-          name?: string
-          phone?: string
-          total_collected?: number | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      coupons: {
-        Row: {
-          amount: number
-          coupon_code: string
+          contract_ref: string
           created_at: string
           customer_id: string
-          expiry_date: string
           id: string
-          is_paid: boolean | null
-          product_category: string
+          sales_id: string
+          start_date: string
           status: string
+          tenor_days: number
+          total_loan_amount: number
           updated_at: string
         }
         Insert: {
-          amount: number
-          coupon_code: string
+          contract_ref: string
           created_at?: string
           customer_id: string
-          expiry_date: string
           id?: string
-          is_paid?: boolean | null
-          product_category: string
+          sales_id: string
+          start_date: string
           status?: string
+          tenor_days: number
+          total_loan_amount: number
           updated_at?: string
         }
         Update: {
-          amount?: number
-          coupon_code?: string
+          contract_ref?: string
           created_at?: string
           customer_id?: string
-          expiry_date?: string
           id?: string
-          is_paid?: boolean | null
-          product_category?: string
+          sales_id?: string
+          start_date?: string
           status?: string
+          tenor_days?: number
+          total_loan_amount?: number
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "coupons_customer_id_fkey"
+            foreignKeyName: "credit_contracts_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_contracts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_details"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "credit_contracts_sales_id_fkey"
+            columns: ["sales_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_details"
+            referencedColumns: ["sales_id"]
+          },
+          {
+            foreignKeyName: "credit_contracts_sales_id_fkey"
+            columns: ["sales_id"]
+            isOneToOne: false
+            referencedRelation: "sales_agents"
             referencedColumns: ["id"]
           },
         ]
@@ -100,11 +85,8 @@ export type Database = {
       customers: {
         Row: {
           address: string | null
-          area: string
-          collector_id: string | null
+          assigned_sales_id: string | null
           created_at: string
-          credit_score: string | null
-          customer_code: string
           id: string
           name: string
           phone: string | null
@@ -112,11 +94,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
-          area: string
-          collector_id?: string | null
+          assigned_sales_id?: string | null
           created_at?: string
-          credit_score?: string | null
-          customer_code: string
           id?: string
           name: string
           phone?: string | null
@@ -124,11 +103,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
-          area?: string
-          collector_id?: string | null
+          assigned_sales_id?: string | null
           created_at?: string
-          credit_score?: string | null
-          customer_code?: string
           id?: string
           name?: string
           phone?: string | null
@@ -136,84 +112,153 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "customers_collector_id_fkey"
-            columns: ["collector_id"]
+            foreignKeyName: "customers_assigned_sales_id_fkey"
+            columns: ["assigned_sales_id"]
             isOneToOne: false
-            referencedRelation: "collectors"
+            referencedRelation: "invoice_details"
+            referencedColumns: ["sales_id"]
+          },
+          {
+            foreignKeyName: "customers_assigned_sales_id_fkey"
+            columns: ["assigned_sales_id"]
+            isOneToOne: false
+            referencedRelation: "sales_agents"
             referencedColumns: ["id"]
           },
         ]
       }
-      payments: {
+      installment_coupons: {
         Row: {
-          amount_due: number
-          amount_paid: number | null
-          collection_date: string
-          collector_id: string | null
-          coupon_id: string
+          amount: number
+          collected_by: string | null
+          contract_id: string
           created_at: string
-          customer_id: string
+          due_date: string
           id: string
-          next_collection_date: string | null
-          overdue_date: string | null
+          installment_index: number
+          notes: string | null
+          paid_amount: number | null
+          paid_date: string | null
           status: string
           updated_at: string
         }
         Insert: {
-          amount_due: number
-          amount_paid?: number | null
-          collection_date: string
-          collector_id?: string | null
-          coupon_id: string
+          amount: number
+          collected_by?: string | null
+          contract_id: string
           created_at?: string
-          customer_id: string
+          due_date: string
           id?: string
-          next_collection_date?: string | null
-          overdue_date?: string | null
+          installment_index: number
+          notes?: string | null
+          paid_amount?: number | null
+          paid_date?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
-          amount_due?: number
-          amount_paid?: number | null
-          collection_date?: string
-          collector_id?: string | null
-          coupon_id?: string
+          amount?: number
+          collected_by?: string | null
+          contract_id?: string
           created_at?: string
-          customer_id?: string
+          due_date?: string
           id?: string
-          next_collection_date?: string | null
-          overdue_date?: string | null
+          installment_index?: number
+          notes?: string | null
+          paid_amount?: number | null
+          paid_date?: string | null
           status?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "payments_collector_id_fkey"
-            columns: ["collector_id"]
+            foreignKeyName: "installment_coupons_collected_by_fkey"
+            columns: ["collected_by"]
             isOneToOne: false
-            referencedRelation: "collectors"
+            referencedRelation: "invoice_details"
+            referencedColumns: ["sales_id"]
+          },
+          {
+            foreignKeyName: "installment_coupons_collected_by_fkey"
+            columns: ["collected_by"]
+            isOneToOne: false
+            referencedRelation: "sales_agents"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "payments_coupon_id_fkey"
-            columns: ["coupon_id"]
+            foreignKeyName: "installment_coupons_contract_id_fkey"
+            columns: ["contract_id"]
             isOneToOne: false
-            referencedRelation: "coupons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payments_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
+            referencedRelation: "credit_contracts"
             referencedColumns: ["id"]
           },
         ]
       }
+      sales_agents: {
+        Row: {
+          agent_code: string
+          area: string | null
+          created_at: string
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_code: string
+          area?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_code?: string
+          area?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      invoice_details: {
+        Row: {
+          agent_code: string | null
+          amount: number | null
+          contract_id: string | null
+          contract_ref: string | null
+          coupon_id: string | null
+          customer_address: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          due_date: string | null
+          installment_index: number | null
+          no_faktur: string | null
+          paid_amount: number | null
+          paid_date: string | null
+          sales_id: string | null
+          sales_name: string | null
+          start_date: string | null
+          status: string | null
+          tenor_days: number | null
+          total_loan_amount: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installment_coupons_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "credit_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       [_ in never]: never
