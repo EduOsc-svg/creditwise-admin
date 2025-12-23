@@ -8,6 +8,7 @@ export interface Customer {
   phone: string | null;
   address: string | null;
   assigned_sales_id: string | null;
+  total_due?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,12 +42,32 @@ export function useCreateCustomer() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onMutate: async (newCustomer) => {
+      await queryClient.cancelQueries({ queryKey: ["customers"] });
+      const previous = queryClient.getQueryData<Customer[]>(["customers"]);
+      const tempId = `tmp-${Date.now()}`;
+      const optimistic = [
+        ...(previous || []),
+        {
+          id: tempId,
+          name: newCustomer.name,
+          phone: newCustomer.phone || null,
+          address: newCustomer.address || null,
+          assigned_sales_id: newCustomer.assigned_sales_id || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ];
+      queryClient.setQueryData(["customers"], optimistic);
+      return { previous };
+    },
+    onError: (err, _newCustomer, context: any) => {
+      queryClient.setQueryData(["customers"], context?.previous || []);
+      toast.error("Gagal menambahkan pelanggan: " + (err as any).message);
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success("Pelanggan berhasil ditambahkan");
-    },
-    onError: (error) => {
-      toast.error("Gagal menambahkan pelanggan: " + error.message);
     },
   });
 }
@@ -88,12 +109,19 @@ export function useDeleteCustomer() {
       
       if (error) throw error;
     },
-    onSuccess: () => {
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["customers"] });
+      const previous = queryClient.getQueryData<Customer[]>(["customers"]);
+      queryClient.setQueryData(["customers"], (old?: Customer[]) => (old || []).filter((c) => c.id !== id));
+      return { previous };
+    },
+    onError: (err, _id, context: any) => {
+      queryClient.setQueryData(["customers"], context?.previous || []);
+      toast.error("Gagal menghapus pelanggan: " + (err as any).message);
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success("Pelanggan berhasil dihapus");
-    },
-    onError: (error) => {
-      toast.error("Gagal menghapus pelanggan: " + error.message);
     },
   });
 }

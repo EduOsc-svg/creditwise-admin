@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
@@ -21,7 +21,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Plus, Search, Phone, MapPin, Edit, Trash2, Loader2, User } from "lucide-react";
 import { useCustomers, useCreateCustomer, useDeleteCustomer, Customer } from "@/hooks/useCustomers";
+import { useForm } from "react-hook-form";
 import { useSalesAgents } from "@/hooks/useSalesAgents";
+import { useCreateCreditContract } from "@/hooks/useCreditContracts";
 
 export default function CustomerMaster() {
   const { data: customers = [], isLoading } = useCustomers();
@@ -31,19 +33,28 @@ export default function CustomerMaster() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [newCustomer, setNewCustomer] = useState({
-    name: "",
-    phone: "",
-    address: "",
-    assigned_sales_id: "",
-  });
 
-  const filteredCustomers = customers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.address?.toLowerCase() || "").includes(searchQuery.toLowerCase())
-  );
+  const { register, handleSubmit, reset, setValue, formState } = useForm<{
+    name: string;
+    phone?: string;
+    address?: string;
+    assigned_sales_id?: string;
+    product_type?: string;
+    total_loan_amount?: string;
+    tenor_days?: string;
+    daily_installment_amount?: string;
+  }>({ defaultValues: { name: "", phone: "", address: "", assigned_sales_id: "", product_type: "", total_loan_amount: "", tenor_days: "", daily_installment_amount: "" } });
+  const createCreditContract = useCreateCreditContract();
+
+  const filteredCustomers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter((c) =>
+      c.name.toLowerCase().includes(q) ||
+      c.id.toLowerCase().includes(q) ||
+      (c.address?.toLowerCase() || "").includes(q)
+    );
+  }, [customers, searchQuery]);
 
   const getSalesName = (salesId: string | null) => {
     if (!salesId) return "-";
@@ -51,24 +62,53 @@ export default function CustomerMaster() {
     return agent?.name || "-";
   };
 
-  const handleAddCustomer = async () => {
-    if (!newCustomer.name) {
-      return;
+  // form submission handled by react-hook-form onSubmit
+
+  const onSubmit = handleSubmit(async (values) => {
+    if (!values.name) return;
+    try {
+      const customer = await createCustomer.mutateAsync({
+        name: values.name,
+        phone: values.phone || null,
+        address: values.address || null,
+        assigned_sales_id: values.assigned_sales_id || null,
+      });
+      // create credit contract if product and total provided
+      const totalLoan = values.total_loan_amount ? parseFloat(values.total_loan_amount) : 0;
+      const tenorDays = values.tenor_days ? parseInt(values.tenor_days, 10) : 100; // default tenor
+      let dailyInstallment = 0;
+      if (values.daily_installment_amount) {
+        dailyInstallment = parseFloat(values.daily_installment_amount);
+      } else if (totalLoan > 0 && tenorDays > 0) {
+        dailyInstallment = Math.round(totalLoan / tenorDays);
+      }
+      if (values.product_type || totalLoan > 0) {
+        await createCreditContract.mutateAsync({
+          contract_ref: `A${Date.now().toString().slice(-6)}`,
+          customer_id: customer.id,
+          sales_id: values.assigned_sales_id || customer.assigned_sales_id,
+          tenor_days: tenorDays,
+          start_date: new Date().toISOString().slice(0,10),
+          total_loan_amount: totalLoan,
+          product_type: values.product_type || 'Unknown',
+          daily_installment_amount: dailyInstallment,
+        });
+      }
+      reset();
+      setIsDialogOpen(false);
+    } catch (err) {
+      // error toast handled in hook
     }
-
-    await createCustomer.mutateAsync({
-      name: newCustomer.name,
-      phone: newCustomer.phone || null,
-      address: newCustomer.address || null,
-      assigned_sales_id: newCustomer.assigned_sales_id || null,
-    });
-
-    setNewCustomer({ name: "", phone: "", address: "", assigned_sales_id: "" });
-    setIsDialogOpen(false);
-  };
+  });
 
   const handleDelete = async (customer: Customer) => {
-    await deleteCustomer.mutateAsync(customer.id);
+    const ok = window.confirm(`Hapus pelanggan ${customer.name}? Tindakan ini tidak dapat dibatalkan.`);
+    if (!ok) return;
+    try {
+      await deleteCustomer.mutateAsync(customer.id);
+    } catch (err) {
+      // error toast handled in hook
+    }
   };
 
   const columns = [
@@ -117,6 +157,20 @@ export default function CustomerMaster() {
       ),
     },
     {
+      key: "total_due",
+      header: "Total Due",
+      className: "w-32 text-right",
+      render: (item: Customer) => (
+        <div className="text-sm">
+          {typeof (item as any).total_due === 'number' ? (
+            <span className="font-medium">{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format((item as any).total_due)}</span>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </div>
+      ),
+    },
+    {
       key: "actions",
       header: "",
       className: "w-20",
@@ -158,40 +212,37 @@ export default function CustomerMaster() {
               Tambah Pelanggan
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="lg:max-w-md">
             <DialogHeader>
               <DialogTitle>Tambah Pelanggan Baru</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 mt-4">
+            <form onSubmit={onSubmit} className="space-y-4 mt-4">
               <div className="space-y-2">
                 <Label>Nama Lengkap *</Label>
                 <Input
                   placeholder="Masukkan nama pelanggan"
-                  value={newCustomer.name}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                  {...register("name", { required: true })}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Nomor Telepon</Label>
                 <Input
                   placeholder="08xxxxxxxxxx"
-                  value={newCustomer.phone}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                  {...register("phone")}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Alamat</Label>
                 <Input
                   placeholder="Alamat lengkap"
-                  value={newCustomer.address}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                  {...register("address")}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Sales</Label>
                 <Select
-                  value={newCustomer.assigned_sales_id}
-                  onValueChange={(value) => setNewCustomer({ ...newCustomer, assigned_sales_id: value })}
+                  value={formState.dirtyFields.assigned_sales_id ? undefined : undefined}
+                  onValueChange={(value) => setValue("assigned_sales_id", value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih sales" />
@@ -205,17 +256,44 @@ export default function CustomerMaster() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button 
-                onClick={handleAddCustomer} 
-                className="w-full"
-                disabled={createCustomer.isPending}
-              >
-                {createCustomer.isPending && (
+              <div className="space-y-2">
+                <Label>Nama Product</Label>
+                <Input
+                  placeholder="Contoh: Elektronik / KPR"
+                  {...register("product_type")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Jumlah Kredit (Total Loan)</Label>
+                <Input
+                  placeholder="Jumlah total yang harus dibayar"
+                  type="number"
+                  {...register("total_loan_amount")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Tenor (hari)</Label>
+                <Input
+                  placeholder="Contoh: 100"
+                  type="number"
+                  {...register("tenor_days")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Nominal Cicilan Harian (opsional)</Label>
+                <Input
+                  placeholder="Isi jika ingin override nominal harian"
+                  type="number"
+                  {...register("daily_installment_amount")}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={createCustomer.isLoading}>
+                {createCustomer.isLoading && (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 )}
                 Simpan Pelanggan
               </Button>
-            </div>
+              </form>
           </DialogContent>
         </Dialog>
       </PageHeader>

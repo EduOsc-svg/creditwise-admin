@@ -10,6 +10,9 @@ export interface CreditContract {
   start_date: string;
   tenor_days: number;
   total_loan_amount: number;
+  product_type?: string;
+  daily_installment_amount?: number;
+  current_installment_index?: number;
   status: string;
   created_at: string;
   updated_at: string;

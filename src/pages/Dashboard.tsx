@@ -22,6 +22,7 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { supabase } from '../integrations/supabase/client';
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat("id-ID", {
@@ -355,3 +356,78 @@ export default function Dashboard() {
     </MainLayout>
   );
 }
+
+// Tambahkan fungsi untuk menambahkan pelanggan, kontrak, dan kupon cicilan
+async function addCustomer(customerData, contractData, couponsData) {
+  try {
+    // Tambahkan pelanggan
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .insert(customerData)
+      .select();
+
+    if (customerError) throw new Error(customerError.message);
+
+    const customerId = customer[0].id;
+
+    // Tambahkan kontrak kredit
+    const { data: contract, error: contractError } = await supabase
+      .from('credit_contracts')
+      .insert({ ...contractData, customer_id: customerId })
+      .select();
+
+    if (contractError) throw new Error(contractError.message);
+
+    const contractId = contract[0].id;
+
+    // Tambahkan kupon cicilan
+    const coupons = couponsData.map((coupon) => ({
+      ...coupon,
+      contract_id: contractId,
+    }));
+
+    const { error: couponsError } = await supabase.from('installment_coupons').insert(coupons);
+
+    if (couponsError) throw new Error(couponsError.message);
+
+    console.log('Customer, contract, and coupons added successfully:', {
+      customer,
+      contract,
+      coupons,
+    });
+
+    return { customer, contract, coupons };
+  } catch (error) {
+    console.error('Error adding customer:', error);
+    throw error;
+  }
+}
+
+// Contoh data input
+const customerData = {
+  name: 'M, ADI/TK, DEWI',
+  address: 'JL. S. PARMAN',
+  phone: '081345678901',
+  assigned_sales_id: 'SOME_SALES_AGENT_ID',
+};
+
+const contractData = {
+  contract_ref: 'A001',
+  sales_id: 'SOME_SALES_AGENT_ID',
+  tenor_days: 100,
+  start_date: '2025-12-01',
+  total_loan_amount: 6000000,
+};
+
+const couponsData = [
+  { installment_index: 28, due_date: '2025-12-13', amount: 60000 },
+  { installment_index: 29, due_date: '2025-12-14', amount: 60000 },
+  { installment_index: 30, due_date: '2025-12-15', amount: 60000 },
+];
+
+// Panggil fungsi untuk menambahkan data
+addCustomer(customerData, contractData, couponsData).then((result) => {
+  console.log('Result:', result);
+}).catch((error) => {
+  console.error('Error:', error);
+});
